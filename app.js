@@ -68,6 +68,8 @@ $('#btn-login').onclick = async () => {
   enter(l);
 };
 
+$('#btn-guest').onclick = () => enter('гость');
+
 $('#auth-pass').onkeydown = e => e.key === 'Enter' && $('#btn-login').click();
 const err = m => { $('#auth-err').textContent = m; };
 

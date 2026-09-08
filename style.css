@@ -39,6 +39,8 @@ input:focus,textarea:focus{border-color:var(--acc);box-shadow:0 0 0 3px #8b5cf62
 .auth-btns{display:flex;gap:8px;margin-top:6px}
 .auth-btns button{flex:1}
 .err{color:var(--danger);font-size:13px;min-height:18px;margin-top:10px}
+.guest{width:100%;margin-top:4px;border:none;background:none;color:var(--dim);font-size:13px}
+.guest:hover{background:none;color:var(--acc2);transform:none}
 @keyframes rise{from{opacity:0;transform:translateY(22px) scale(.97)}}
 
 /* ---------- КАРКАС ---------- */
