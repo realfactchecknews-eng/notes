@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Конспекты</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<!-- ЭКРАН ВХОДА -->
+<div id="auth" class="auth">
+  <div class="auth-card">
+    <div class="logo">✦</div>
+    <h1>Конспекты</h1>
+    <p class="sub">папки · рисование · файлы · ИИ</p>
+    <input id="auth-login" placeholder="логин" autocomplete="username">
+    <input id="auth-pass" type="password" placeholder="пароль" autocomplete="current-password">
+    <div class="auth-btns">
+      <button id="btn-login" class="primary">Войти</button>
+      <button id="btn-register">Создать аккаунт</button>
+    </div>
+    <div id="auth-err" class="err"></div>
+  </div>
+</div>
+
+<!-- ПРИЛОЖЕНИЕ -->
+<div id="app" class="app hidden">
+  <aside class="sidebar">
+    <div class="side-head">
+      <span id="who"></span>
+      <button id="btn-logout" class="icon" title="Выйти">⏻</button>
+    </div>
+    <input id="search" class="search" placeholder="Поиск…">
+    <div id="tree" class="tree"></div>
+    <button id="btn-folder" class="add-folder">+ Предмет</button>
+    <button id="btn-settings" class="add-folder ghost">⚙ Настройки ИИ</button>
+  </aside>
+
+  <main class="main">
+    <div id="empty" class="empty">
+      <div class="empty-art">✎</div>
+      <p>Выбери конспект слева или создай новый</p>
+    </div>
+
+    <div id="editor" class="editor hidden">
+      <div class="toolbar">
+        <input id="title" class="title" placeholder="Без названия">
+        <div class="tools">
+          <button data-cmd="bold" title="Жирный"><b>B</b></button>
+          <button data-cmd="italic" title="Курсив"><i>I</i></button>
+          <button data-cmd="underline" title="Подчёркнутый"><u>U</u></button>
+          <button data-cmd="strikeThrough" title="Зачёркнутый"><s>S</s></button>
+          <span class="sep"></span>
+          <button data-block="h1">H1</button>
+          <button data-block="h2">H2</button>
+          <button data-cmd="insertUnorderedList">• Список</button>
+          <button data-cmd="insertOrderedList">1. Список</button>
+          <button data-block="blockquote">❝</button>
+          <button data-block="pre">&lt;/&gt;</button>
+          <span class="sep"></span>
+          <button id="btn-hl" title="Выделить">🖍</button>
+          <button id="btn-table" title="Таблица">▦</button>
+          <button id="btn-draw" title="Рисунок">✏️</button>
+          <button id="btn-file" title="Файл">📎</button>
+          <span class="sep"></span>
+          <button id="btn-ai" class="ai-btn">✨ ИИ</button>
+          <button id="btn-del" class="danger" title="Удалить">🗑</button>
+        </div>
+      </div>
+      <div id="body" class="body" contenteditable="true" spellcheck="false"></div>
+      <div id="files" class="files"></div>
+      <div id="saved" class="saved">сохранено</div>
+    </div>
+  </main>
+
+  <!-- ИИ ПАНЕЛЬ -->
+  <aside id="ai-panel" class="ai-panel hidden">
+    <div class="ai-head">
+      <b>✨ ИИ-ассистент</b>
+      <button id="ai-close" class="icon">✕</button>
+    </div>
+    <div class="ai-actions">
+      <button data-ai="structure">Структурировать</button>
+      <button data-ai="improve">Улучшить текст</button>
+      <button data-ai="table">Сделать таблицу</button>
+      <button data-ai="summary">Краткий конспект</button>
+      <button data-ai="questions">Вопросы для проверки</button>
+      <button data-ai="terms">Выделить термины</button>
+    </div>
+    <textarea id="ai-prompt" placeholder="Или свой запрос к конспекту…"></textarea>
+    <button id="ai-run" class="primary wide">Выполнить</button>
+    <div id="ai-out" class="ai-out"></div>
+    <div id="ai-apply" class="ai-apply hidden">
+      <button id="ai-replace">Заменить конспект</button>
+      <button id="ai-append">Добавить в конец</button>
+    </div>
+  </aside>
+</div>
+
+<!-- РИСОВАЛКА -->
+<div id="draw-modal" class="modal hidden">
+  <div class="modal-box draw-box">
+    <div class="draw-tools">
+      <input type="color" id="pen-color" value="#e9e6ff">
+      <input type="range" id="pen-size" min="1" max="30" value="3">
+      <button id="pen-mode" class="active">✏️ Кисть</button>
+      <button id="eraser-mode">◻︎ Ластик</button>
+      <button id="draw-clear">Очистить</button>
+      <span class="grow"></span>
+      <button id="draw-cancel">Отмена</button>
+      <button id="draw-save" class="primary">Вставить</button>
+    </div>
+    <canvas id="canvas" width="1200" height="700"></canvas>
+  </div>
+</div>
+
+<!-- НАСТРОЙКИ -->
+<div id="set-modal" class="modal hidden">
+  <div class="modal-box">
+    <h3>Настройки ИИ</h3>
+    <p class="hint">Ключ Groq (бесплатный): console.groq.com/keys. Хранится только в твоём браузере.</p>
+    <input id="api-key" placeholder="gsk_...">
+    <select id="api-model">
+      <option value="llama-3.3-70b-versatile">llama-3.3-70b (умная)</option>
+      <option value="llama-3.1-8b-instant">llama-3.1-8b (быстрая)</option>
+    </select>
+    <div class="row">
+      <button id="set-cancel">Отмена</button>
+      <button id="set-save" class="primary">Сохранить</button>
+    </div>
+  </div>
+</div>
+
+<input type="file" id="file-input" multiple hidden>
+<div id="toast" class="toast"></div>
+
+<script src="app.js"></script>
+</body>
+</html>
