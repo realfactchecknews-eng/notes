@@ -108,6 +108,7 @@ $('#btn-login').onclick = async () => {
 
 $('#btn-guest').onclick = () => enter('гость');
 
+
 /* переключение Вход / Регистрация */
 $$('.tab').forEach(t => t.onclick = () => {
   const reg = t.dataset.tab === 'reg';
@@ -121,6 +122,19 @@ $$('.tab').forEach(t => t.onclick = () => {
 const submitAuth = () => ($('.tabs').classList.contains('reg') ? $('#btn-register') : $('#btn-login')).click();
 $('#auth-login').onkeydown = e => e.key === 'Enter' && $('#auth-pass').focus();
 $('#auth-pass').onkeydown = e => e.key === 'Enter' && submitAuth();
+
+/* Регистрация ещё не настроена: вход только гостем.
+   Поставить true — вернутся логин, пароль и вкладки. */
+const ACCOUNTS = false;
+if (!ACCOUNTS) {
+  ['.tabs', '#auth-login', '#auth-pass', '#btn-login', '#btn-register', '.or']
+    .forEach(s => $(s).closest('.fld') ? $(s).closest('.fld').remove() : $(s).remove());
+  const g = $('#btn-guest');
+  g.className = 'primary wide big-guest';
+  g.textContent = 'Войти →';
+  $('#soon').classList.remove('hidden');
+  $('.tiny:not(.soon)').remove();
+}
 
 function err(m) {
   const el = $('#auth-err');

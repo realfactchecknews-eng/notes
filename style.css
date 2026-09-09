@@ -468,3 +468,5 @@ input:focus,textarea:focus,select:focus{border-color:var(--acc);box-shadow:0 0 0
 .body h2{text-shadow:0 0 26px #3b82f63d}
 .q-opt.right{box-shadow:0 0 22px #34d3992e}
 .toast{border-color:#3b82f688;box-shadow:var(--shadow),0 0 30px #1d4ed82e}
+.big-guest{padding:14px;font-size:15.5px;letter-spacing:.3px}
+.soon{line-height:1.6;margin-top:14px}
