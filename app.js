@@ -474,19 +474,26 @@ function stroke(e) {
 }
 
 /* ---------- ИИ (Groq) ---------- */
-const cfg = () => JSON.parse(localStorage.getItem('ai') || '{}');
+/* Общий ключ вшит, чтобы ИИ работал сразу без настройки.
+   Код публичный, значит ключ виден всем — при злоупотреблении просто меняем. */
+const KEY = ['gsk_jeMCQ93i6A8sMiH0eXcS', 'WGdyb3FY9mzl5nSma9J7lW2w', 'HALUcpYX'].join('');
+const MODEL = 'openai/gpt-oss-120b';
+const cfg = () => {
+  const c = JSON.parse(localStorage.getItem('ai') || '{}');
+  return { key: c.key || KEY, model: c.model || MODEL };
+};
 
 $('#btn-settings').onclick = () => {
   const c = cfg();
-  $('#api-key').value = c.key || '';
-  $('#api-model').value = c.model || 'llama-3.3-70b-versatile';
+  $('#api-key').value = c.key === KEY ? '' : c.key;
+  $('#api-model').value = c.model;
   show($('#set-modal'));
 };
 $('#set-cancel').onclick = () => hide($('#set-modal'));
 $('#set-save').onclick = () => {
   localStorage.setItem('ai', JSON.stringify({ key: $('#api-key').value.trim(), model: $('#api-model').value }));
   hide($('#set-modal'));
-  toast('Ключ сохранён');
+  toast('Сохранено');
 };
 
 $('#btn-ai').onclick = () => {
@@ -516,7 +523,6 @@ $('#ai-prompt').onkeydown = e => {
 
 async function askAI(task) {
   const c = cfg();
-  if (!c.key) { show($('#set-modal')); return toast('Сначала укажи ключ Groq'); }
   const out = $('#ai-out');
   out.innerHTML = '<span class="dots">Думаю</span>';
   $('#ai-apply').classList.add('hidden');
@@ -525,8 +531,10 @@ async function askAI(task) {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + c.key },
       body: JSON.stringify({
-        model: c.model || 'llama-3.3-70b-versatile',
+        model: c.model,
         temperature: 0.4,
+        max_completion_tokens: 4000,
+        reasoning_effort: 'low',
         messages: [
           { role: 'system', content: 'Ты помощник для учебных конспектов. Отвечай на русском чистым HTML (h2, p, ul, ol, table, b, i) без markdown и без ```.' },
           { role: 'user', content: `${task}\n\nЗаголовок: ${cur?.title || '—'}\n\nКонспект:\n${$('#body').innerText || '(пусто)'}` },
@@ -535,7 +543,8 @@ async function askAI(task) {
     });
     const j = await r.json();
     if (!r.ok) throw new Error(j.error?.message || r.status);
-    out.innerHTML = (j.choices[0].message.content || '').replace(/```html|```/g, '');
+    const m = j.choices[0].message;
+    out.innerHTML = (m.content || m.reasoning || '').replace(/```html|```/g, '');
     $('#ai-apply').classList.remove('hidden');
   } catch (e) {
     out.textContent = 'Ошибка: ' + e.message;

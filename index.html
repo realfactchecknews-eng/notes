@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Конспекты</title>
-<link rel="stylesheet" href="style.css?v=5">
+<link rel="stylesheet" href="style.css?v=6">
 </head>
 <body>
 
@@ -143,11 +143,13 @@
 <div id="set-modal" class="modal hidden">
   <div class="modal-box">
     <h3>Настройки ИИ</h3>
-    <p class="hint">Ключ Groq (бесплатный): console.groq.com/keys. Хранится только в твоём браузере.</p>
-    <input id="api-key" placeholder="gsk_...">
+    <p class="hint">ИИ уже работает — общий ключ вшит в приложение. Поле ниже нужно, только если хочешь подставить свой ключ с console.groq.com/keys (хранится в твоём браузере).</p>
+    <input id="api-key" placeholder="свой ключ gsk_… (необязательно)">
     <select id="api-model">
-      <option value="llama-3.3-70b-versatile">llama-3.3-70b (умная)</option>
-      <option value="llama-3.1-8b-instant">llama-3.1-8b (быстрая)</option>
+      <option value="openai/gpt-oss-120b">gpt-oss-120b (умная)</option>
+      <option value="qwen/qwen3.8-27b">qwen3.8-27b</option>
+      <option value="openai/gpt-oss-20b">gpt-oss-20b (быстрая)</option>
+      <option value="groq/compound">compound (с поиском)</option>
     </select>
     <div class="row">
       <button id="set-cancel">Отмена</button>
@@ -178,6 +180,6 @@
 <input type="file" id="file-input" multiple hidden>
 <div id="toast" class="toast"></div>
 
-<script src="app.js?v=5"></script>
+<script src="app.js?v=6"></script>
 </body>
 </html>
