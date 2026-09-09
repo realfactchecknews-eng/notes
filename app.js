@@ -304,7 +304,7 @@ $$('[data-block]').forEach(b => b.onclick = () => {
   $('#body').focus(); touch(); syncTools();
 });
 $('#btn-hl').onclick = () => {
-  document.execCommand('hiliteColor', false, '#8b5cf655');
+  document.execCommand('hiliteColor', false, '#3b82f655');
   $('#body').focus(); touch();
 };
 $('#btn-line').onclick = () => insert('<hr>');
@@ -379,50 +379,50 @@ const esc = t => t.replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&g
 /* стили документа — светлая бумага, но фиолетовые акценты приложения */
 const DOC_CSS = `
 @page{margin:18mm 16mm}
-body{font:11.5pt/1.65 Georgia,"Times New Roman",serif;color:#1a1a24;margin:0;background:#fff}
-.wm{position:fixed;right:-40px;bottom:40px;font-size:78pt;color:#8b5cf6;opacity:.06;
+body{font:11.5pt/1.65 Georgia,"Times New Roman",serif;color:#111827;margin:0;background:#fff}
+.wm{position:fixed;right:-40px;bottom:40px;font-size:78pt;color:#3b82f6;opacity:.06;
   transform:rotate(-28deg);font-family:Arial,sans-serif;font-weight:700;letter-spacing:-3px;z-index:0}
 .page{position:relative;z-index:1}
 .cover{text-align:center;padding:52mm 0 0}
 .cover p{text-align:center}
-.cover .mark{font-size:34pt;color:#8b5cf6}
-.cover h1{font-size:30pt;margin:6mm 0 3mm;letter-spacing:-1px;color:#2b1b52}
-.cover .sub{font-size:13pt;color:#6b6880;margin:0}
-.cover .rule{width:52mm;height:3px;background:linear-gradient(90deg,#7c3aed,#c026d3);
+.cover .mark{font-size:34pt;color:#3b82f6}
+.cover h1{font-size:30pt;margin:6mm 0 3mm;letter-spacing:-1px;color:#152a5e}
+.cover .sub{font-size:13pt;color:#64748b;margin:0}
+.cover .rule{width:52mm;height:3px;background:linear-gradient(90deg,#2563eb,#22d3ee);
   margin:9mm auto;border-radius:3px}
 .cover .who{font-size:10.5pt;color:#8b88a0;margin-top:26mm}
 .toc{page-break-before:always}
-.toc h2,.ch-t{color:#5b21b6}
-.toc h2{font-size:18pt;border-bottom:2px solid #ede9fe;padding-bottom:3mm;margin-bottom:6mm}
+.toc h2,.ch-t{color:#1d4ed8}
+.toc h2{font-size:18pt;border-bottom:2px solid #dbeafe;padding-bottom:3mm;margin-bottom:6mm}
 .toc ol{list-style:none;padding:0;counter-reset:ch}
 .toc li.ch{counter-increment:ch;margin:4mm 0;font-weight:700;font-size:12.5pt}
-.toc li.ch:before{content:counter(ch) ". ";color:#8b5cf6}
+.toc li.ch:before{content:counter(ch) ". ";color:#3b82f6}
 .toc ul{list-style:none;padding-left:8mm;margin:2mm 0 0;font-weight:400;font-size:11pt;color:#4b4a5e}
 .toc ul li{margin:1.6mm 0}
-.toc ul li:before{content:"— ";color:#c4b5fd}
+.toc ul li:before{content:"— ";color:#93c5fd}
 .toc a{color:inherit;text-decoration:none}
 section{page-break-before:always}
 section:first-of-type{page-break-before:auto}
 .ch-t{font-size:21pt;margin:0 0 2mm;letter-spacing:-.5px}
-.ch-meta{font-size:9.5pt;color:#9b98ae;border-bottom:1px solid #ede9fe;
+.ch-meta{font-size:9.5pt;color:#94a3b8;border-bottom:1px solid #dbeafe;
   padding-bottom:3mm;margin-bottom:6mm;font-family:Arial,sans-serif}
-h1,h2,h3{page-break-after:avoid;color:#3b2a6b}
+h1,h2,h3{page-break-after:avoid;color:#1e3a8a}
 h1{font-size:16pt;margin:7mm 0 2mm}
 h2{font-size:13.5pt;margin:6mm 0 2mm}
 p{margin:0 0 3mm;text-align:justify}
 ul,ol{margin:0 0 3mm;padding-left:7mm}
 li{margin:1mm 0}
-blockquote{border-left:3px solid #a78bfa;background:#f7f4ff;margin:4mm 0;
-  padding:2mm 5mm;color:#4c1d95;font-style:italic}
-pre{background:#f5f4fa;border:1px solid #e6e3f2;border-radius:3mm;padding:3mm 4mm;
+blockquote{border-left:3px solid #60a5fa;background:#eff6ff;margin:4mm 0;
+  padding:2mm 5mm;color:#1e3a8a;font-style:italic}
+pre{background:#f1f5f9;border:1px solid #dbeafe;border-radius:3mm;padding:3mm 4mm;
   font:10pt ui-monospace,Consolas,monospace;white-space:pre-wrap}
 table{border-collapse:collapse;width:100%;margin:4mm 0;page-break-inside:avoid;font-size:10.5pt}
-td,th{border:1px solid #ddd9ec;padding:2mm 3mm;text-align:left}
-th{background:#f3f0ff;color:#4c1d95;font-weight:700}
-img{max-width:100%;border:1px solid #e6e3f2;border-radius:2mm;margin:3mm 0}
-hr{border:none;height:1px;background:#e6e3f2;margin:6mm 0}
-.att{font-size:10pt;color:#6b6880;margin-top:5mm;font-family:Arial,sans-serif}
-.att b{color:#5b21b6}
+td,th{border:1px solid #cbd5e1;padding:2mm 3mm;text-align:left}
+th{background:#eff6ff;color:#1e3a8a;font-weight:700}
+img{max-width:100%;border:1px solid #dbeafe;border-radius:2mm;margin:3mm 0}
+hr{border:none;height:1px;background:#dbeafe;margin:6mm 0}
+.att{font-size:10pt;color:#64748b;margin-top:5mm;font-family:Arial,sans-serif}
+.att b{color:#1d4ed8}
 `;
 
 /* Word ставит разрыв страницы, объявленный на контейнере, каждому его абзацу —
@@ -461,7 +461,7 @@ function buildDoc(notes, subject, withToc, forWord) {
 
   const today = new Date().toLocaleDateString('ru', { day: 'numeric', month: 'long', year: 'numeric' });
   const cover = `<div class="cover">
-      <div class="mark">✦</div>
+      <div class="mark">Clarity</div>
       <h1>${esc(subject)}</h1>
       <p class="sub">${notes.length === 1 ? esc(notes[0].title || 'Конспект') : `Конспекты — ${notes.length} шт.`}</p>
       <div class="rule"></div>
@@ -477,7 +477,7 @@ function buildDoc(notes, subject, withToc, forWord) {
 function docPage(notes, subject, withToc, forWord) {
   const { cover, tocBlock, body } = buildDoc(notes, subject, withToc, forWord);
   /* в Word position:fixed не повторяется по страницам, поэтому знак только на обложке */
-  const wm = `<div class="wm"${forWord ? ' style="position:absolute;top:120mm;right:0"' : ''}>Конспекты</div>`;
+  const wm = `<div class="wm"${forWord ? ' style="position:absolute;top:120mm;right:0"' : ''}>Clarity</div>`;
   /* для .doc разрывы уже расставлены явно — убираем те, что Word размножает по абзацам */
   const css = forWord
     ? DOC_CSS.replace(/^\.toc\{page-break-before:always\}$/m, '.toc{}')

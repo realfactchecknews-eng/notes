@@ -4,20 +4,30 @@
       <stop stop-color="#38bdf8"/><stop offset=".55" stop-color="#2563eb"/><stop offset="1" stop-color="#1e3a8a"/>
     </linearGradient>
     <linearGradient id="gls" x1="20" y1="6" x2="46" y2="58" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#dbeafe"/><stop offset="1" stop-color="#93c5fd" stop-opacity=".5"/>
+      <stop stop-color="#dbeafe" stop-opacity=".95"/><stop offset="1" stop-color="#93c5fd" stop-opacity=".45"/>
     </linearGradient>
     <clipPath id="in">
       <path d="M27 20v-4h10v4c0 3 1.6 4.4 3.6 6.1A18 18 0 1 1 23.4 26C25.4 24.4 27 23 27 20Z"/>
     </clipPath>
   </defs>
-  <rect width="64" height="64" rx="15" fill="#080c16"/>
+
+  <!-- пробка -->
   <rect x="25" y="4" width="14" height="7" rx="2.6" fill="#93c5fd"/>
+  <rect x="26.6" y="5.4" width="10.8" height="2.2" rx="1.1" fill="#e0f2fe" opacity=".75"/>
+
+  <!-- стекло -->
   <path d="M27 20v-4h10v4c0 3 1.6 4.4 3.6 6.1A18 18 0 1 1 23.4 26C25.4 24.4 27 23 27 20Z"
-        fill="#1e3a8a" fill-opacity=".35" stroke="url(#gls)" stroke-width="2.6" stroke-linejoin="round"/>
+        fill="url(#gls)" fill-opacity=".2" stroke="url(#gls)" stroke-width="2.6" stroke-linejoin="round"/>
+
+  <!-- зелье -->
   <g clip-path="url(#in)">
-    <path d="M8 34c4.5 0 5-3.4 9.5-3.4S23 34 27.5 34s5-3.4 9.5-3.4S42.5 34 47 34s5-3.4 9-3.4V60H8V34Z" fill="url(#liq)"/>
+    <path d="M8 34c4.5 0 5-3.4 9.5-3.4S23 34 27.5 34s5-3.4 9.5-3.4S42.5 34 47 34s5-3.4 9-3.4V60H8V34Z"
+          fill="url(#liq)"/>
     <circle cx="25" cy="44" r="2.4" fill="#bae6fd" opacity=".55"/>
     <circle cx="36" cy="50" r="1.6" fill="#bae6fd" opacity=".45"/>
+    <circle cx="31" cy="39" r="1.1" fill="#e0f2fe" opacity=".6"/>
   </g>
-  <path d="M22 34a11 11 0 0 1 5-7" stroke="#f0f9ff" stroke-width="3" stroke-linecap="round" opacity=".5"/>
+
+  <!-- блик -->
+  <path d="M22 34a11 11 0 0 1 5-7" stroke="#f0f9ff" stroke-width="3" stroke-linecap="round" opacity=".55"/>
 </svg>
