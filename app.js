@@ -106,8 +106,20 @@ $('#btn-login').onclick = async () => {
 };
 
 $('#btn-guest').onclick = () => enter('гость');
+
+/* переключение Вход / Регистрация */
+$$('.tab').forEach(t => t.onclick = () => {
+  const reg = t.dataset.tab === 'reg';
+  $('.tabs').classList.toggle('reg', reg);
+  $$('.tab').forEach(x => x.classList.toggle('on', x === t));
+  $('#btn-login').classList.toggle('hidden', reg);
+  $('#btn-register').classList.toggle('hidden', !reg);
+  $('#auth-err').textContent = '';
+  $('#auth-login').focus();
+});
+const submitAuth = () => ($('.tabs').classList.contains('reg') ? $('#btn-register') : $('#btn-login')).click();
 $('#auth-login').onkeydown = e => e.key === 'Enter' && $('#auth-pass').focus();
-$('#auth-pass').onkeydown = e => e.key === 'Enter' && $('#btn-login').click();
+$('#auth-pass').onkeydown = e => e.key === 'Enter' && submitAuth();
 
 function err(m) {
   const el = $('#auth-err');

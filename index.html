@@ -4,24 +4,44 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Конспекты</title>
-<link rel="stylesheet" href="style.css?v=4">
+<link rel="stylesheet" href="style.css?v=5">
 </head>
 <body>
 
 <!-- ЭКРАН ВХОДА -->
 <div id="auth" class="auth">
-  <div class="auth-card">
-    <div class="logo">✦</div>
-    <h1>Конспекты</h1>
-    <p class="sub">папки · рисование · файлы · ИИ</p>
-    <input id="auth-login" placeholder="логин" autocomplete="username">
-    <input id="auth-pass" type="password" placeholder="пароль" autocomplete="current-password">
-    <div class="auth-btns">
-      <button id="btn-login" class="primary">Войти</button>
-      <button id="btn-register">Создать аккаунт</button>
+  <div class="blobs"><i></i><i></i><i></i></div>
+
+  <div class="auth-wrap">
+    <div class="hero">
+      <div class="logo">✦</div>
+      <h1>Конспекты</h1>
+      <p class="tag">Учебная библиотека, которая думает вместе с тобой</p>
+      <div class="feats">
+        <span>📁 Папки по предметам</span>
+        <span>✏️ Рисование от руки</span>
+        <span>📎 Файлы и картинки</span>
+        <span>✨ ИИ-ассистент</span>
+      </div>
     </div>
-    <div id="auth-err" class="err"></div>
-    <button id="btn-guest" class="guest">Войти как гость →</button>
+
+    <div class="auth-card">
+      <div class="tabs">
+        <button class="tab on" data-tab="login">Вход</button>
+        <button class="tab" data-tab="reg">Регистрация</button>
+        <span class="tab-ink"></span>
+      </div>
+      <label class="fld"><span>Логин</span>
+        <input id="auth-login" placeholder="как тебя звать" autocomplete="username"></label>
+      <label class="fld"><span>Пароль</span>
+        <input id="auth-pass" type="password" placeholder="от 4 символов" autocomplete="current-password"></label>
+      <button id="btn-login" class="primary wide">Войти</button>
+      <button id="btn-register" class="wide hidden">Создать аккаунт</button>
+      <div id="auth-err" class="err"></div>
+      <div class="or"><span>или</span></div>
+      <button id="btn-guest" class="guest">Войти как гость →</button>
+      <p class="tiny">Данные хранятся только в этом браузере</p>
+    </div>
   </div>
 </div>
 
@@ -158,6 +178,6 @@
 <input type="file" id="file-input" multiple hidden>
 <div id="toast" class="toast"></div>
 
-<script src="app.js?v=4"></script>
+<script src="app.js?v=5"></script>
 </body>
 </html>
