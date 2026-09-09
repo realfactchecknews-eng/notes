@@ -497,7 +497,7 @@ $('#exp-pdf').onclick = () => {
     setTimeout(() => fr.remove(), 60000);
   };
   document.body.appendChild(fr);
-  toast('Откроется печать — выбери «Сохранить как PDF»');
+  toast('Печать → «Сохранить как PDF», колонтитулы сними');
 };
 
 $('#exp-word').onclick = () => {

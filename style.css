@@ -280,6 +280,9 @@ input:focus,textarea:focus,select:focus{border-color:var(--acc);box-shadow:0 0 0
 .pick input{width:auto;accent-color:var(--acc)}
 .chk{display:flex;align-items:center;gap:9px;color:var(--dim);font-size:13.5px;cursor:pointer}
 .chk input{width:auto;accent-color:var(--acc)}
+.warn{margin:0;font-size:12.5px;line-height:1.5;color:#d8b4fe;background:#8b5cf614;
+  border:1px solid #8b5cf62e;border-left:3px solid var(--acc);border-radius:10px;padding:10px 12px}
+.warn b{color:#fff}
 
 .draw-box{width:auto}
 .draw-tools{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
