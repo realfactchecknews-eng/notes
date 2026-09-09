@@ -8,7 +8,7 @@
 <link rel="apple-touch-icon" href="favicon.svg">
 <meta name="theme-color" content="#0a0a0f">
 <meta name="description" content="Конспекты по предметам: папки, рисование от руки, файлы и ИИ-ассистент.">
-<link rel="stylesheet" href="style.css?v=8">
+<link rel="stylesheet" href="style.css?v=9">
 </head>
 <body>
 
@@ -56,6 +56,10 @@
       <span id="who"></span>
       <button id="btn-logout" class="icon" title="Выйти">⏻</button>
     </div>
+    <div class="views">
+      <button id="v-notes" class="on">📓 Конспекты</button>
+      <button id="v-study">🎓 Учить<span id="due-badge" class="badge hidden"></span></button>
+    </div>
     <input id="search" class="search" placeholder="Поиск…">
     <div id="tree" class="tree"></div>
     <button id="btn-folder" class="add-folder">+ Предмет</button>
@@ -99,6 +103,36 @@
       <div id="files" class="files"></div>
       <div id="meta" class="meta"></div>
       <div id="saved" class="saved">сохранено</div>
+    </div>
+
+    <!-- УЧЁБА -->
+    <div id="study" class="study hidden">
+      <div class="st-tabs">
+        <button class="st-tab on" data-st="cards">🎴 Карточки</button>
+        <button class="st-tab" data-st="tests">📝 Тесты</button>
+      </div>
+
+      <div id="st-cards" class="st-pane">
+        <div class="st-head">
+          <select id="card-folder"></select>
+          <span id="card-stat" class="st-stat"></span>
+          <button id="card-all">Вся колода</button>
+        </div>
+        <div id="card-area"></div>
+      </div>
+
+      <div id="st-tests" class="st-pane hidden">
+        <div class="st-head">
+          <select id="test-src"></select>
+          <select id="test-count">
+            <option value="5">5 вопросов</option>
+            <option value="10" selected>10 вопросов</option>
+            <option value="15">15 вопросов</option>
+          </select>
+          <button id="test-gen" class="primary">Составить тест</button>
+        </div>
+        <div id="test-area"></div>
+      </div>
     </div>
   </main>
 
@@ -198,12 +232,14 @@
   </div>
 </div>
 
+<div id="sel-pop" class="sel-pop hidden"><button id="sel-card">🎴 В колоду</button></div>
+
 <button id="burger" class="burger hidden">☰</button>
 <div id="scrim" class="scrim"></div>
 
 <input type="file" id="file-input" multiple hidden>
 <div id="toast" class="toast"></div>
 
-<script src="app.js?v=8"></script>
+<script src="app.js?v=9"></script>
 </body>
 </html>

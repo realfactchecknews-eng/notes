@@ -85,6 +85,7 @@ async function enter(login) {
   $('#app').classList.remove('hidden');
   $('#burger').classList.remove('hidden');
   render();
+  refreshBadge();
 }
 
 $('#btn-register').onclick = async () => {
@@ -240,6 +241,7 @@ function delNote(f, n) {
 /* ---------- Редактор ---------- */
 function openNote(f, n) {
   curFolder = f; cur = n;
+  if (!$('#study').classList.contains('hidden')) view(false);
   $('#empty').classList.add('hidden');
   const ed = $('#editor');
   ed.classList.remove('hidden', 'in'); void ed.offsetWidth; ed.classList.add('in');
@@ -423,9 +425,14 @@ hr{border:none;height:1px;background:#e6e3f2;margin:6mm 0}
 .att b{color:#5b21b6}
 `;
 
+/* Word ставит разрыв страницы, объявленный на контейнере, каждому его абзацу —
+   поэтому для .doc разрывы задаём отдельными элементами, а не классами. */
+const WORD_BREAK = '<br clear="all" style="mso-special-character:line-break;page-break-before:always">';
+
 /* собирает готовый документ из конспектов */
-function buildDoc(notes, subject, withToc) {
+function buildDoc(notes, subject, withToc, forWord) {
   let toc = '', body = '';
+  const brk = forWord ? WORD_BREAK : '';
 
   notes.forEach((n, i) => {
     const box = document.createElement('div');
@@ -448,7 +455,7 @@ function buildDoc(notes, subject, withToc) {
       ? `<p class="att"><b>Вложения:</b> ${n.files.map(f => esc(f.name)).join(', ')}</p>`
       : '';
     const d = new Date(n.ts).toLocaleDateString('ru');
-    body += `<section><h1 class="ch-t" id="c${i}">${name}</h1>
+    body += `${brk}<section><h1 class="ch-t" id="c${i}">${name}</h1>
       <p class="ch-meta">${esc(subject)} · ${d}</p>${box.innerHTML}${files}</section>`;
   });
 
@@ -462,17 +469,23 @@ function buildDoc(notes, subject, withToc) {
     </div>`;
 
   const tocBlock = withToc && notes.length
-    ? `<div class="toc"><h2>Содержание</h2><ol>${toc}</ol></div>` : '';
+    ? `${brk}<div class="toc"><h2>Содержание</h2><ol>${toc}</ol></div>` : '';
 
   return { cover, tocBlock, body };
 }
 
 function docPage(notes, subject, withToc, forWord) {
-  const { cover, tocBlock, body } = buildDoc(notes, subject, withToc);
+  const { cover, tocBlock, body } = buildDoc(notes, subject, withToc, forWord);
   /* в Word position:fixed не повторяется по страницам, поэтому знак только на обложке */
   const wm = `<div class="wm"${forWord ? ' style="position:absolute;top:120mm;right:0"' : ''}>Конспекты</div>`;
+  /* для .doc разрывы уже расставлены явно — убираем те, что Word размножает по абзацам */
+  const css = forWord
+    ? DOC_CSS.replace(/^\.toc\{page-break-before:always\}$/m, '.toc{}')
+             .replace(/^section\{page-break-before:always\}$/m, 'section{}')
+             .replace(/^section:first-of-type\{page-break-before:auto\}$/m, '')
+    : DOC_CSS;
   return `<!DOCTYPE html><html lang="ru"><head><meta charset="utf-8">
-    <title>${esc(subject)}</title><style>${DOC_CSS}</style></head>
+    <title>${esc(subject)}</title><style>${css}</style></head>
     <body>${wm}<div class="page">${cover}${tocBlock}${body}</div></body></html>`;
 }
 
@@ -722,6 +735,325 @@ addEventListener('keydown', e => {
     closeSidebar();
   }
 });
+
+/* ================= УЧЁБА: карточки и тесты ================= */
+
+/* Интервалы повторения по Лейтнеру, в днях. Ошибся — назад в первую коробку. */
+const BOXES = [0, 1, 2, 4, 8, 16, 32];
+const DAY = 864e5;
+const cards = () => (data.cards ||= []);
+const due = () => cards().filter(c => c.due <= Date.now());
+
+function saveCard(term, def, folder, note) {
+  cards().unshift({ id: uid(), term, def, folder, note, box: 0, due: Date.now(), ts: Date.now() });
+  save(); refreshBadge();
+}
+
+function refreshBadge() {
+  const b = $('#due-badge'), n = data?.cards ? due().length : 0;
+  b.textContent = n;
+  b.classList.toggle('hidden', !n);
+}
+
+/* --- переключение разделов --- */
+function view(study) {
+  $('#v-notes').classList.toggle('on', !study);
+  $('#v-study').classList.toggle('on', study);
+  $('#study').classList.toggle('hidden', !study);
+  $('#editor').classList.toggle('hidden', study || !cur);
+  $('#empty').classList.toggle('hidden', study || !!cur);
+  $('.tree').classList.toggle('dim', study);
+  if (study) { fillPickers(); drawCards(); }
+  closeSidebar();
+}
+$('#v-notes').onclick = () => view(false);
+$('#v-study').onclick = () => view(true);
+
+$$('.st-tab').forEach(t => t.onclick = () => {
+  $$('.st-tab').forEach(x => x.classList.toggle('on', x === t));
+  const isCards = t.dataset.st === 'cards';
+  $('#st-cards').classList.toggle('hidden', !isCards);
+  $('#st-tests').classList.toggle('hidden', isCards);
+  if (isCards) drawCards();
+});
+
+function fillPickers() {
+  const f = $('#card-folder');
+  f.innerHTML = '<option value="">Все предметы</option>' +
+    data.folders.map(x => `<option value="${x.id}">${esc(x.name)}</option>`).join('');
+
+  const s = $('#test-src');
+  s.innerHTML = data.folders.map(x =>
+    `<optgroup label="${esc(x.name)}">` +
+    `<option value="f:${x.id}">Весь предмет — ${esc(x.name)}</option>` +
+    x.notes.map(n => `<option value="n:${n.id}">${esc(n.title || 'Без названия')}</option>`).join('') +
+    '</optgroup>').join('') || '<option value="">Сначала создай конспект</option>';
+}
+$('#card-folder').onchange = drawCards;
+
+/* --- карточки --- */
+let queue = [], flipped = false;
+
+function drawCards() {
+  const fid = $('#card-folder').value;
+  const pool = cards().filter(c => !fid || c.folder === fid);
+  queue = pool.filter(c => c.due <= Date.now());
+  $('#card-stat').textContent = pool.length
+    ? `${queue.length} к повторению · ${pool.length} всего`
+    : '';
+  refreshBadge();
+
+  const area = $('#card-area');
+  if (!pool.length) {
+    area.innerHTML = `<div class="st-empty"><div class="big">🎴</div>
+      <p>Колода пуста.</p>
+      <p class="sm">Открой конспект, выдели слово или фразу — и нажми «🎴 В колоду».
+      Определение подберёт ИИ по смыслу самого конспекта.</p></div>`;
+    return;
+  }
+  if (!queue.length) {
+    const next = new Date(Math.min(...pool.map(c => c.due)));
+    area.innerHTML = `<div class="st-empty"><div class="big">✓</div>
+      <p>На сегодня всё повторено.</p>
+      <p class="sm">Следующая карточка — ${next.toLocaleDateString('ru')}.</p>
+      <button id="card-force">Всё равно повторить</button></div>`;
+    $('#card-force').onclick = () => { queue = pool.slice(); showCard(); };
+    return;
+  }
+  showCard();
+}
+
+function showCard() {
+  const c = queue[0];
+  if (!c) return drawCards();
+  flipped = false;
+  $('#card-area').innerHTML = `
+    <div class="flash" id="flash">
+      <div class="fl-in">
+        <div class="fl-face fl-front">
+          <span class="fl-tag">${esc(folderName(c.folder))}</span>
+          <div class="fl-term">${esc(c.term)}</div>
+          <span class="fl-hint">нажми, чтобы увидеть определение</span>
+        </div>
+        <div class="fl-face fl-back">
+          <div class="fl-def">${esc(c.def)}</div>
+        </div>
+      </div>
+    </div>
+    <div class="fl-btns hidden" id="fl-btns">
+      <button id="fl-bad">Не помню</button>
+      <button id="fl-ok" class="primary">Помню</button>
+    </div>
+    <div class="fl-under">
+      <span>Осталось: ${queue.length}</span>
+      <button id="fl-del" class="icon" title="Удалить карточку">🗑</button>
+    </div>`;
+
+  $('#flash').onclick = flip;
+  $('#fl-bad').onclick = () => grade(false);
+  $('#fl-ok').onclick = () => grade(true);
+  $('#fl-del').onclick = () => {
+    data.cards = cards().filter(x => x !== c);
+    queue.shift(); save(); drawCards(); toast('Карточка удалена');
+  };
+}
+
+function flip() {
+  if (flipped) return;
+  flipped = true;
+  $('#flash').classList.add('flip');
+  $('#fl-btns').classList.remove('hidden');
+}
+
+function grade(ok) {
+  const c = queue.shift();
+  c.box = ok ? Math.min(c.box + 1, BOXES.length - 1) : 0;
+  c.due = Date.now() + (ok ? BOXES[c.box] * DAY : 6e5);   // ошибся — вернём через 10 минут
+  if (!ok) queue.push(c);
+  save();
+  queue.length ? showCard() : drawCards();
+}
+
+const folderName = id => data.folders.find(f => f.id === id)?.name || 'Без предмета';
+
+/* список всей колоды */
+$('#card-all').onclick = () => {
+  const fid = $('#card-folder').value;
+  const pool = cards().filter(c => !fid || c.folder === fid);
+  if (!pool.length) return toast('Колода пуста');
+  $('#card-area').innerHTML = `<div class="deck">${pool.map(c => `
+    <div class="deck-row" data-id="${c.id}">
+      <div><b>${esc(c.term)}</b><span class="deck-def">${esc(c.def)}</span></div>
+      <span class="deck-box" title="Уровень запоминания">${'●'.repeat(c.box + 1)}</span>
+      <button class="icon">✕</button>
+    </div>`).join('')}</div>
+    <button id="deck-back" class="wide">← К повторению</button>`;
+  $('#deck-back').onclick = drawCards;
+  $$('.deck-row button').forEach(b => b.onclick = () => {
+    const id = b.closest('.deck-row').dataset.id;
+    data.cards = cards().filter(x => x.id !== id);
+    save(); $('#card-all').click();
+  });
+};
+
+/* --- добавление карточки выделением текста --- */
+const pop = $('#sel-pop');
+$('#body').addEventListener('mouseup', () => setTimeout(showPop, 10));
+$('#body').addEventListener('keyup', () => setTimeout(showPop, 10));
+document.addEventListener('mousedown', e => {
+  if (!pop.contains(e.target)) pop.classList.add('hidden');
+});
+
+function showPop() {
+  const s = getSelection();
+  const t = s.toString().trim();
+  if (!t || t.length > 80 || !cur) return pop.classList.add('hidden');
+  const r = s.getRangeAt(0).getBoundingClientRect();
+  pop.style.left = Math.max(8, r.left + r.width / 2 - 60) + 'px';
+  pop.style.top = (r.top - 44) + 'px';
+  pop.classList.remove('hidden');
+}
+
+$('#sel-card').onclick = async () => {
+  const term = getSelection().toString().trim();
+  pop.classList.add('hidden');
+  if (!term) return;
+  if (cards().some(c => c.term.toLowerCase() === term.toLowerCase()))
+    return toast('Такая карточка уже есть');
+
+  toast(`«${term}» — подбираю определение…`);
+  let def = await defineTerm(term, $('#body').innerText);
+  if (!def) def = await ask(`Определение для «${term}»`);
+  if (!def) return;
+  saveCard(term, def, curFolder.id, cur.id);
+  toast(`🎴 «${term}» в колоде`);
+};
+
+async function defineTerm(term, context) {
+  try {
+    const r = await groq([
+      { role: 'system', content: 'Ты даёшь короткие точные определения терминов для учебных карточек. Ответ — только определение, 1–2 предложения, без вводных слов и без повтора самого термина в начале.' },
+      { role: 'user', content: `Термин: «${term}»\n\nКонтекст из конспекта:\n${context.slice(0, 4000)}` },
+    ]);
+    return r.trim().replace(/^["«]|["»]$/g, '');
+  } catch { return ''; }
+}
+
+/* --- тесты --- */
+let test = null;
+
+$('#test-gen').onclick = async () => {
+  const v = $('#test-src').value;
+  if (!v) return toast('Сначала создай конспект');
+  const count = +$('#test-count').value;
+
+  let notes, title;
+  if (v.startsWith('f:')) {
+    const f = data.folders.find(x => x.id === v.slice(2));
+    notes = f.notes; title = f.name;
+  } else {
+    for (const f of data.folders) {
+      const n = f.notes.find(x => x.id === v.slice(2));
+      if (n) { notes = [n]; title = n.title || 'Конспект'; }
+    }
+  }
+  const text = notes.map(n => `${n.title}\n${htmlToText(n.html)}`).join('\n\n').slice(0, 12000);
+  if (text.trim().length < 60) return toast('В конспекте слишком мало текста');
+
+  $('#test-area').innerHTML = '<div class="st-empty"><span class="dots">Составляю тест</span></div>';
+  try {
+    const raw = await groq([
+      { role: 'system', content: 'Ты составляешь проверочные тесты по учебным конспектам. Отвечай ТОЛЬКО валидным JSON без markdown.' },
+      { role: 'user', content: `Составь ${count} вопросов с 4 вариантами ответа по этому конспекту. Проверяй понимание, а не дословную память. Формат строго:\n{"q":[{"t":"вопрос","a":["вариант1","вариант2","вариант3","вариант4"],"c":0,"why":"почему верен правильный ответ"}]}\nПоле c — индекс правильного варианта (0-3). Всё на русском.\n\nКонспект:\n${text}` },
+    ]);
+    const json = JSON.parse(raw.slice(raw.indexOf('{'), raw.lastIndexOf('}') + 1));
+    const qs = (json.q || []).filter(q => q.t && q.a?.length === 4 && q.c >= 0 && q.c < 4);
+    if (!qs.length) throw new Error('пустой тест');
+    test = { qs, i: 0, right: 0, title };
+    drawQuestion();
+  } catch (e) {
+    $('#test-area').innerHTML = `<div class="st-empty"><div class="big">😕</div>
+      <p>Не получилось составить тест.</p><p class="sm">${esc(e.message)}</p></div>`;
+  }
+};
+
+function drawQuestion() {
+  const q = test.qs[test.i];
+  $('#test-area').innerHTML = `
+    <div class="quiz">
+      <div class="q-bar"><i style="width:${test.i / test.qs.length * 100}%"></i></div>
+      <div class="q-num">Вопрос ${test.i + 1} из ${test.qs.length} · ${esc(test.title)}</div>
+      <div class="q-text">${esc(q.t)}</div>
+      <div class="q-opts">${q.a.map((a, i) =>
+        `<button class="q-opt" data-i="${i}">${esc(a)}</button>`).join('')}</div>
+      <div class="q-why hidden" id="q-why"></div>
+      <button id="q-next" class="primary wide hidden">Дальше →</button>
+    </div>`;
+
+  $$('.q-opt').forEach(b => b.onclick = () => {
+    if ($('#q-why').classList.contains('shown')) return;
+    const i = +b.dataset.i, ok = i === q.c;
+    if (ok) test.right++;
+    $$('.q-opt').forEach((x, j) => {
+      x.classList.add('done');
+      if (j === q.c) x.classList.add('right');
+      if (j === i && !ok) x.classList.add('wrong');
+    });
+    const why = $('#q-why');
+    why.innerHTML = `<b>${ok ? '✓ Верно' : '✕ Неверно'}</b> ${esc(q.why || '')}`;
+    why.className = 'q-why shown ' + (ok ? 'good' : 'bad');
+    $('#q-next').classList.remove('hidden');
+    $('#q-next').textContent = test.i === test.qs.length - 1 ? 'Показать результат' : 'Дальше →';
+  });
+
+  $('#q-next').onclick = () => {
+    test.i++;
+    test.i < test.qs.length ? drawQuestion() : drawResult();
+  };
+}
+
+function drawResult() {
+  const p = Math.round(test.right / test.qs.length * 100);
+  const mark = p >= 85 ? '5' : p >= 65 ? '4' : p >= 45 ? '3' : '2';
+  (data.tests ||= []).unshift({ title: test.title, right: test.right, total: test.qs.length, ts: Date.now() });
+  data.tests = data.tests.slice(0, 10);
+  save();
+
+  $('#test-area').innerHTML = `
+    <div class="result">
+      <div class="score" style="--p:${p}"><b>${p}<span>%</span></b></div>
+      <p class="res-line">${test.right} из ${test.qs.length} · оценка ${mark}</p>
+      <p class="sm">${p >= 85 ? 'Тема закрыта.' : p >= 65 ? 'Хорошо, но пробелы есть.' : 'Стоит перечитать конспект и пройти ещё раз.'}</p>
+      <button id="q-again" class="primary">Пройти заново</button>
+      ${data.tests.length > 1 ? `<div class="hist">${data.tests.slice(1).map(t =>
+        `<div><span>${esc(t.title)}</span><b>${t.right}/${t.total}</b>
+         <i>${new Date(t.ts).toLocaleDateString('ru')}</i></div>`).join('')}</div>` : ''}
+    </div>`;
+  $('#q-again').onclick = () => { test.i = 0; test.right = 0; drawQuestion(); };
+}
+
+/* общий вызов модели */
+async function groq(messages) {
+  const c = cfg();
+  const r = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + c.key },
+    body: JSON.stringify({
+      model: c.model, temperature: 0.3,
+      max_completion_tokens: 4000, reasoning_effort: 'low', messages,
+    }),
+  });
+  const j = await r.json();
+  if (!r.ok) throw new Error(j.error?.message || r.status);
+  const m = j.choices[0].message;
+  return (m.content || m.reasoning || '').replace(/```json|```html|```/g, '');
+}
+
+function htmlToText(html) {
+  const d = document.createElement('div');
+  d.innerHTML = html || '';
+  return d.innerText;
+}
 
 /* автовход */
 const last = localStorage.getItem('last');
