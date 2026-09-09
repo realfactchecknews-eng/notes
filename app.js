@@ -380,12 +380,16 @@ const esc = t => t.replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&g
 const DOC_CSS = `
 @page{margin:18mm 16mm}
 body{font:11.5pt/1.65 Georgia,"Times New Roman",serif;color:#111827;margin:0;background:#fff}
-.wm{position:fixed;right:-40px;bottom:40px;font-size:78pt;color:#3b82f6;opacity:.06;
-  transform:rotate(-28deg);font-family:Arial,sans-serif;font-weight:700;letter-spacing:-3px;z-index:0}
+.wm{position:fixed;right:2mm;bottom:5mm;opacity:.055;transform:rotate(-20deg);z-index:0;
+  text-align:center;width:62mm}
+.wm img{width:36mm;display:block;margin:0 auto}
+.wm span{display:block;font:700 15pt Arial,sans-serif;letter-spacing:6px;color:#2563eb;margin-top:-3mm}
 .page{position:relative;z-index:1}
 .cover{text-align:center;padding:52mm 0 0}
 .cover p{text-align:center}
-.cover .mark{font-size:34pt;color:#3b82f6}
+.cover .mark-img{display:block;margin:0 auto 5mm}
+.cover .mark{font:700 10.5pt Arial,sans-serif;letter-spacing:7px;text-transform:uppercase;
+  color:#3b82f6;margin-bottom:10mm}
 .cover h1{font-size:30pt;margin:6mm 0 3mm;letter-spacing:-1px;color:#152a5e}
 .cover .sub{font-size:13pt;color:#64748b;margin:0}
 .cover .rule{width:52mm;height:3px;background:linear-gradient(90deg,#2563eb,#22d3ee);
@@ -425,12 +429,30 @@ hr{border:none;height:1px;background:#dbeafe;margin:6mm 0}
 .att b{color:#1d4ed8}
 `;
 
+/* колба картинкой — SVG документы Word не понимает, поэтому переводим в PNG */
+let logoCache = null;
+function logoPng() {
+  if (logoCache) return logoCache;
+  logoCache = new Promise(res => {
+    const img = new Image();
+    img.onload = () => {
+      const c = document.createElement('canvas');
+      c.width = 240; c.height = 240;
+      c.getContext('2d').drawImage(img, 0, 0, 240, 240);
+      res(c.toDataURL('image/png'));
+    };
+    img.onerror = () => res('');
+    img.src = 'logo.svg';
+  });
+  return logoCache;
+}
+
 /* Word ставит разрыв страницы, объявленный на контейнере, каждому его абзацу —
    поэтому для .doc разрывы задаём отдельными элементами, а не классами. */
 const WORD_BREAK = '<br clear="all" style="mso-special-character:line-break;page-break-before:always">';
 
 /* собирает готовый документ из конспектов */
-function buildDoc(notes, subject, withToc, forWord) {
+function buildDoc(notes, subject, withToc, forWord, logo) {
   let toc = '', body = '';
   const brk = forWord ? WORD_BREAK : '';
 
@@ -461,6 +483,7 @@ function buildDoc(notes, subject, withToc, forWord) {
 
   const today = new Date().toLocaleDateString('ru', { day: 'numeric', month: 'long', year: 'numeric' });
   const cover = `<div class="cover">
+      ${logo ? `<img class="mark-img" src="${logo}" width="74">` : ''}
       <div class="mark">Clarity</div>
       <h1>${esc(subject)}</h1>
       <p class="sub">${notes.length === 1 ? esc(notes[0].title || 'Конспект') : `Конспекты — ${notes.length} шт.`}</p>
@@ -474,10 +497,12 @@ function buildDoc(notes, subject, withToc, forWord) {
   return { cover, tocBlock, body };
 }
 
-function docPage(notes, subject, withToc, forWord) {
-  const { cover, tocBlock, body } = buildDoc(notes, subject, withToc, forWord);
+async function docPage(notes, subject, withToc, forWord) {
+  const logo = await logoPng();
+  const { cover, tocBlock, body } = buildDoc(notes, subject, withToc, forWord, logo);
   /* в Word position:fixed не повторяется по страницам, поэтому знак только на обложке */
-  const wm = `<div class="wm"${forWord ? ' style="position:absolute;top:120mm;right:0"' : ''}>Clarity</div>`;
+  const wm = `<div class="wm"${forWord ? ' style="position:absolute;top:150mm;right:6mm"' : ''}>
+      ${logo ? `<img src="${logo}">` : ''}<span>CLARITY</span></div>`;
   /* для .doc разрывы уже расставлены явно — убираем те, что Word размножает по абзацам */
   const css = forWord
     ? DOC_CSS.replace(/^\.toc\{page-break-before:always\}$/m, '.toc{}')
@@ -498,12 +523,13 @@ function expTargets() {
 $('#btn-exp').onclick = () => cur && show($('#exp-modal'));
 $('#exp-cancel').onclick = () => hide($('#exp-modal'));
 
-$('#exp-pdf').onclick = () => {
+$('#exp-pdf').onclick = async () => {
   const { notes, subject } = expTargets();
+  const html = await docPage(notes, subject, $('#exp-toc').checked, false);
   hide($('#exp-modal'));
   const fr = document.createElement('iframe');
   fr.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:0';
-  fr.srcdoc = docPage(notes, subject, $('#exp-toc').checked, false);
+  fr.srcdoc = html;
   fr.onload = () => {
     fr.contentWindow.focus();
     fr.contentWindow.print();
@@ -513,10 +539,10 @@ $('#exp-pdf').onclick = () => {
   toast('Печать → «Сохранить как PDF», колонтитулы сними');
 };
 
-$('#exp-word').onclick = () => {
+$('#exp-word').onclick = async () => {
   const { notes, subject } = expTargets();
+  const html = await docPage(notes, subject, $('#exp-toc').checked, true);
   hide($('#exp-modal'));
-  const html = docPage(notes, subject, $('#exp-toc').checked, true);
   const a = document.createElement('a');
   a.href = URL.createObjectURL(new Blob(['﻿' + html], { type: 'application/msword' }));
   a.download = subject.replace(/[\\/:*?"<>|]/g, '') + '.doc';
@@ -1054,6 +1080,13 @@ function htmlToText(html) {
   d.innerHTML = html || '';
   return d.innerText;
 }
+
+/* убираем экран загрузки, когда всё готово */
+addEventListener('load', () => setTimeout(() => {
+  const b = $('#boot');
+  b.classList.add('done');
+  setTimeout(() => b.remove(), 600);
+}, 900));
 
 /* автовход */
 const last = localStorage.getItem('last');

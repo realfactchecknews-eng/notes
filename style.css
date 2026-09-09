@@ -418,3 +418,53 @@ input:focus,textarea:focus,select:focus{border-color:var(--acc);box-shadow:0 0 0
 .sel-pop button{background:linear-gradient(135deg,#2563eb,#22d3ee);border:none;color:#fff;
   font-size:13px;font-weight:600;padding:8px 14px;border-radius:11px;
   box-shadow:0 8px 24px #0009}
+
+/* ---------- ЗАГРУЗКА ---------- */
+.boot{position:fixed;inset:0;z-index:100;display:grid;place-content:center;justify-items:center;gap:20px;
+  background:radial-gradient(700px 500px at 50% 45%,#12306e88,transparent 70%),var(--bg);
+  transition:opacity .55s var(--ease),transform .55s var(--ease)}
+.boot.done{opacity:0;transform:scale(1.08);pointer-events:none}
+.boot-flask{filter:drop-shadow(0 0 30px #38bdf888)}
+.b-fill{animation:fillUp 1.5s var(--ease) forwards}
+@keyframes fillUp{from{y:140}to{y:44}}
+.boot-name{font:700 15px/1 Arial,sans-serif;letter-spacing:9px;color:#93c5fd;
+  text-shadow:0 0 22px #38bdf8aa;animation:bootIn .9s var(--ease) both;animation-delay:.35s}
+@keyframes bootIn{from{opacity:0;letter-spacing:22px}}
+
+/* ---------- АНИМИРОВАННЫЙ БУТЫЛЁК ---------- */
+.flask{display:block;margin:0 0 4px -12px;overflow:visible}
+.flask .halo{animation:halo 4s ease-in-out infinite;transform-origin:60px 96px}
+@keyframes halo{0%,100%{opacity:.5;transform:scale(.9)}50%{opacity:1;transform:scale(1.1)}}
+.flask .wave{animation:swim 5s linear infinite}
+.flask .wave2{animation-duration:7s;animation-direction:reverse}
+@keyframes swim{to{transform:translateX(60px)}}
+.flask .bub{fill:#e0f2fe;opacity:0;animation:rise2 3.4s ease-in infinite}
+.flask .b1{animation-delay:.2s}
+.flask .b2{animation-delay:1.3s;animation-duration:4s}
+.flask .b3{animation-delay:2.1s;animation-duration:3s}
+.flask .b4{animation-delay:2.9s;animation-duration:4.4s}
+@keyframes rise2{
+  0%{opacity:0;transform:translateY(0) scale(.6)}
+  15%{opacity:.75}
+  80%{opacity:.5}
+  100%{opacity:0;transform:translateY(-46px) scale(1.15)}
+}
+.flask .sp{opacity:0;animation:twinkle 3.6s ease-in-out infinite}
+.flask .s2{animation-delay:1.2s}
+.flask .s3{animation-delay:2.3s}
+@keyframes twinkle{0%,100%{opacity:0;transform:scale(.4)}50%{opacity:.9;transform:scale(1)}}
+
+/* ---------- СИЯНИЕ ПО ИНТЕРФЕЙСУ ---------- */
+.hero h1{text-shadow:0 0 60px #3b82f655}
+.auth-card{box-shadow:0 30px 90px #000a,0 0 70px #1d4ed82e,inset 0 1px 0 #ffffff14}
+.tab-ink{box-shadow:0 4px 18px #2563ebaa,0 0 24px #38bdf855}
+.note.active:before{box-shadow:0 0 12px #3b82f6}
+.views button.on{box-shadow:inset 0 0 22px #3b82f61f}
+.st-tab.on,.ai-btn{box-shadow:0 6px 22px #2563eb55,0 0 28px #38bdf82e}
+.fl-face{box-shadow:0 20px 50px #0008,0 0 40px #1d4ed824}
+.fl-back{box-shadow:0 20px 50px #0008,0 0 60px #2563eb3d}
+.score{filter:drop-shadow(0 0 26px #3b82f655)}
+.badge{box-shadow:0 3px 10px #3b82f6aa,0 0 16px #38bdf866}
+.body h2{text-shadow:0 0 26px #3b82f63d}
+.q-opt.right{box-shadow:0 0 22px #34d3992e}
+.toast{border-color:#3b82f688;box-shadow:var(--shadow),0 0 30px #1d4ed82e}
