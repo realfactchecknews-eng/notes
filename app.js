@@ -371,6 +371,147 @@ $('#body').addEventListener('paste', e => {
   r.readAsDataURL(img.getAsFile());
 });
 
+/* ---------- Экспорт в PDF / Word ---------- */
+const esc = t => t.replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
+
+/* стили документа — светлая бумага, но фиолетовые акценты приложения */
+const DOC_CSS = `
+@page{margin:18mm 16mm}
+body{font:11.5pt/1.65 Georgia,"Times New Roman",serif;color:#1a1a24;margin:0;background:#fff}
+.wm{position:fixed;right:-40px;bottom:40px;font-size:78pt;color:#8b5cf6;opacity:.06;
+  transform:rotate(-28deg);font-family:Arial,sans-serif;font-weight:700;letter-spacing:-3px;z-index:0}
+.page{position:relative;z-index:1}
+.cover{text-align:center;padding:52mm 0 0}
+.cover p{text-align:center}
+.cover .mark{font-size:34pt;color:#8b5cf6}
+.cover h1{font-size:30pt;margin:6mm 0 3mm;letter-spacing:-1px;color:#2b1b52}
+.cover .sub{font-size:13pt;color:#6b6880;margin:0}
+.cover .rule{width:52mm;height:3px;background:linear-gradient(90deg,#7c3aed,#c026d3);
+  margin:9mm auto;border-radius:3px}
+.cover .who{font-size:10.5pt;color:#8b88a0;margin-top:26mm}
+.toc{page-break-before:always}
+.toc h2,.ch-t{color:#5b21b6}
+.toc h2{font-size:18pt;border-bottom:2px solid #ede9fe;padding-bottom:3mm;margin-bottom:6mm}
+.toc ol{list-style:none;padding:0;counter-reset:ch}
+.toc li.ch{counter-increment:ch;margin:4mm 0;font-weight:700;font-size:12.5pt}
+.toc li.ch:before{content:counter(ch) ". ";color:#8b5cf6}
+.toc ul{list-style:none;padding-left:8mm;margin:2mm 0 0;font-weight:400;font-size:11pt;color:#4b4a5e}
+.toc ul li{margin:1.6mm 0}
+.toc ul li:before{content:"— ";color:#c4b5fd}
+.toc a{color:inherit;text-decoration:none}
+section{page-break-before:always}
+section:first-of-type{page-break-before:auto}
+.ch-t{font-size:21pt;margin:0 0 2mm;letter-spacing:-.5px}
+.ch-meta{font-size:9.5pt;color:#9b98ae;border-bottom:1px solid #ede9fe;
+  padding-bottom:3mm;margin-bottom:6mm;font-family:Arial,sans-serif}
+h1,h2,h3{page-break-after:avoid;color:#3b2a6b}
+h1{font-size:16pt;margin:7mm 0 2mm}
+h2{font-size:13.5pt;margin:6mm 0 2mm}
+p{margin:0 0 3mm;text-align:justify}
+ul,ol{margin:0 0 3mm;padding-left:7mm}
+li{margin:1mm 0}
+blockquote{border-left:3px solid #a78bfa;background:#f7f4ff;margin:4mm 0;
+  padding:2mm 5mm;color:#4c1d95;font-style:italic}
+pre{background:#f5f4fa;border:1px solid #e6e3f2;border-radius:3mm;padding:3mm 4mm;
+  font:10pt ui-monospace,Consolas,monospace;white-space:pre-wrap}
+table{border-collapse:collapse;width:100%;margin:4mm 0;page-break-inside:avoid;font-size:10.5pt}
+td,th{border:1px solid #ddd9ec;padding:2mm 3mm;text-align:left}
+th{background:#f3f0ff;color:#4c1d95;font-weight:700}
+img{max-width:100%;border:1px solid #e6e3f2;border-radius:2mm;margin:3mm 0}
+hr{border:none;height:1px;background:#e6e3f2;margin:6mm 0}
+.att{font-size:10pt;color:#6b6880;margin-top:5mm;font-family:Arial,sans-serif}
+.att b{color:#5b21b6}
+`;
+
+/* собирает готовый документ из конспектов */
+function buildDoc(notes, subject, withToc) {
+  let toc = '', body = '';
+
+  notes.forEach((n, i) => {
+    const box = document.createElement('div');
+    box.innerHTML = n.html || '';
+    box.querySelectorAll('p:empty, p > br:only-child').forEach(el => {
+      const p = el.tagName === 'P' ? el : el.parentElement;
+      if (!p.textContent.trim() && !p.querySelector('img,table')) p.remove();
+    });
+
+    let sub = '';
+    box.querySelectorAll('h1,h2').forEach((h, j) => {
+      h.id = `h${i}_${j}`;
+      sub += `<li><a href="#h${i}_${j}">${esc(h.textContent)}</a></li>`;
+    });
+
+    const name = esc(n.title || 'Без названия');
+    toc += `<li class="ch"><a href="#c${i}">${name}</a>${sub ? `<ul>${sub}</ul>` : ''}</li>`;
+
+    const files = (n.files || []).length
+      ? `<p class="att"><b>Вложения:</b> ${n.files.map(f => esc(f.name)).join(', ')}</p>`
+      : '';
+    const d = new Date(n.ts).toLocaleDateString('ru');
+    body += `<section><h1 class="ch-t" id="c${i}">${name}</h1>
+      <p class="ch-meta">${esc(subject)} · ${d}</p>${box.innerHTML}${files}</section>`;
+  });
+
+  const today = new Date().toLocaleDateString('ru', { day: 'numeric', month: 'long', year: 'numeric' });
+  const cover = `<div class="cover">
+      <div class="mark">✦</div>
+      <h1>${esc(subject)}</h1>
+      <p class="sub">${notes.length === 1 ? esc(notes[0].title || 'Конспект') : `Конспекты — ${notes.length} шт.`}</p>
+      <div class="rule"></div>
+      <p class="who">${esc(me)} · ${today}</p>
+    </div>`;
+
+  const tocBlock = withToc && notes.length
+    ? `<div class="toc"><h2>Содержание</h2><ol>${toc}</ol></div>` : '';
+
+  return { cover, tocBlock, body };
+}
+
+function docPage(notes, subject, withToc, forWord) {
+  const { cover, tocBlock, body } = buildDoc(notes, subject, withToc);
+  /* в Word position:fixed не повторяется по страницам, поэтому знак только на обложке */
+  const wm = `<div class="wm"${forWord ? ' style="position:absolute;top:120mm;right:0"' : ''}>Конспекты</div>`;
+  return `<!DOCTYPE html><html lang="ru"><head><meta charset="utf-8">
+    <title>${esc(subject)}</title><style>${DOC_CSS}</style></head>
+    <body>${wm}<div class="page">${cover}${tocBlock}${body}</div></body></html>`;
+}
+
+function expTargets() {
+  const folder = $('input[name=scope]:checked').value === 'folder';
+  const notes = folder ? curFolder.notes.filter(n => n.title || n.html) : [cur];
+  return { notes, subject: folder ? curFolder.name : (cur.title || 'Конспект') };
+}
+
+$('#btn-exp').onclick = () => cur && show($('#exp-modal'));
+$('#exp-cancel').onclick = () => hide($('#exp-modal'));
+
+$('#exp-pdf').onclick = () => {
+  const { notes, subject } = expTargets();
+  hide($('#exp-modal'));
+  const fr = document.createElement('iframe');
+  fr.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:0';
+  fr.srcdoc = docPage(notes, subject, $('#exp-toc').checked, false);
+  fr.onload = () => {
+    fr.contentWindow.focus();
+    fr.contentWindow.print();
+    setTimeout(() => fr.remove(), 60000);
+  };
+  document.body.appendChild(fr);
+  toast('Откроется печать — выбери «Сохранить как PDF»');
+};
+
+$('#exp-word').onclick = () => {
+  const { notes, subject } = expTargets();
+  hide($('#exp-modal'));
+  const html = docPage(notes, subject, $('#exp-toc').checked, true);
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob(['﻿' + html], { type: 'application/msword' }));
+  a.download = subject.replace(/[\\/:*?"<>|]/g, '') + '.doc';
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 10000);
+  toast('Документ Word скачан');
+};
+
 /* ---------- Файлы ---------- */
 $('#btn-file').onclick = () => $('#file-input').click();
 $('#file-input').onchange = e => {

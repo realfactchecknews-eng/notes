@@ -273,6 +273,13 @@ input:focus,textarea:focus,select:focus{border-color:var(--acc);box-shadow:0 0 0
 .row-2{display:flex;gap:10px}
 .row-2 label{flex:1;font-size:12.5px;color:var(--dim)}
 .row-2 input{margin-top:4px}
+.pick{flex:1;display:flex;align-items:center;gap:8px;background:#0d0d15;border:1px solid var(--line);
+  border-radius:12px;padding:11px 13px;font-size:13.5px;cursor:pointer;transition:border-color .2s,background .2s}
+.pick:hover{border-color:#8b5cf677}
+.pick:has(:checked){border-color:var(--acc);background:#8b5cf614}
+.pick input{width:auto;accent-color:var(--acc)}
+.chk{display:flex;align-items:center;gap:9px;color:var(--dim);font-size:13.5px;cursor:pointer}
+.chk input{width:auto;accent-color:var(--acc)}
 
 .draw-box{width:auto}
 .draw-tools{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
