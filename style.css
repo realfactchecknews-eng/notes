@@ -39,36 +39,37 @@ input:focus,textarea:focus,select:focus{border-color:var(--acc);box-shadow:0 0 0
 .grow{flex:1}
 
 /* ---------- ГЛАВНОЕ МЕНЮ (вход) ---------- */
-.auth{position:fixed;inset:0;z-index:60;display:grid;place-items:center;overflow:hidden;
+.auth{position:fixed;inset:0;z-index:60;display:flex;overflow:auto;overscroll-behavior:contain;
   background:
-    radial-gradient(1200px 700px at 15% -10%,#12306e55,transparent 60%),
-    radial-gradient(900px 600px at 90% 110%,#0c4a6e44,transparent 60%),
+    radial-gradient(1500px 900px at 12% -15%,#12306e66,transparent 62%),
+    radial-gradient(1200px 800px at 92% 115%,#0c4a6e55,transparent 62%),
     var(--bg);
+  background-attachment:local;
   transition:opacity .4s var(--ease),transform .4s var(--ease)}
 .auth:before{content:"";position:absolute;inset:0;pointer-events:none;
   background-image:linear-gradient(#ffffff08 1px,transparent 1px),
                    linear-gradient(90deg,#ffffff08 1px,transparent 1px);
-  background-size:44px 44px;
-  mask:radial-gradient(70% 60% at 50% 45%,#000 30%,transparent 100%);
-  -webkit-mask:radial-gradient(70% 60% at 50% 45%,#000 30%,transparent 100%)}
+  background-size:52px 52px;
+  mask:radial-gradient(85% 75% at 50% 45%,#000 35%,transparent 100%);
+  -webkit-mask:radial-gradient(85% 75% at 50% 45%,#000 35%,transparent 100%)}
 .auth.gone{opacity:0;transform:scale(1.05);pointer-events:none}
 
 /* размытые пятна на фоне */
-.blobs{position:absolute;inset:0;filter:blur(90px);opacity:.3;pointer-events:none}
+.blobs{position:fixed;inset:0;filter:blur(100px);opacity:.32;pointer-events:none}
 .blobs i{position:absolute;border-radius:50%;display:block}
-.blobs i:nth-child(1){width:420px;height:420px;background:#2563eb;left:8%;top:12%;
+.blobs i:nth-child(1){width:520px;height:520px;background:#2563eb;left:8%;top:12%;
   animation:drift 19s ease-in-out infinite}
-.blobs i:nth-child(2){width:340px;height:340px;background:#22d3ee;right:10%;top:22%;
+.blobs i:nth-child(2){width:430px;height:430px;background:#22d3ee;right:10%;top:22%;
   animation:drift 23s ease-in-out infinite reverse}
-.blobs i:nth-child(3){width:300px;height:300px;background:#2563eb;left:42%;bottom:4%;
+.blobs i:nth-child(3){width:380px;height:380px;background:#2563eb;left:42%;bottom:4%;
   animation:drift 27s ease-in-out infinite}
 @keyframes drift{
   33%{transform:translate(70px,-50px) scale(1.15)}
   66%{transform:translate(-60px,40px) scale(.9)}
 }
 
-.auth-wrap{position:relative;display:flex;align-items:center;gap:70px;
-  padding:24px;max-width:980px;width:100%;justify-content:center}
+.auth-wrap{position:relative;margin:auto;display:flex;align-items:center;gap:70px;
+  padding:60px 24px;max-width:980px;width:100%;justify-content:center}
 
 /* левая половина */
 .hero{max-width:330px;animation:heroIn .7s var(--ease) both}
@@ -122,7 +123,7 @@ input:focus,textarea:focus,select:focus{border-color:var(--acc);box-shadow:0 0 0
 @keyframes fade{from{opacity:0}}
 
 @media(max-width:860px){
-  .auth-wrap{flex-direction:column;gap:26px}
+  .auth-wrap{flex-direction:column;gap:26px;padding:44px 20px}
   .hero{text-align:center;max-width:340px}
   .hero h1{font-size:38px}
   .feats{justify-content:center}
