@@ -8,7 +8,7 @@
 <link rel="apple-touch-icon" href="favicon.svg">
 <meta name="theme-color" content="#080c16">
 <meta name="description" content="Clarity — конспекты по предметам: папки, рисование от руки, файлы, карточки, тесты и ИИ-ассистент.">
-<link rel="stylesheet" href="style.css?v=15">
+<link rel="stylesheet" href="style.css?v=16">
 </head>
 <body>
 
@@ -99,18 +99,31 @@
         <button class="tab" data-tab="reg">Регистрация</button>
         <span class="tab-ink"></span>
       </div>
-      <label class="fld"><span>Логин</span>
-        <input id="auth-login" placeholder="как тебя звать" autocomplete="username"></label>
+
+      <button id="btn-google" class="wide google">
+        <svg viewBox="0 0 48 48" width="17" height="17" aria-hidden="true">
+          <path fill="#4285F4" d="M45 24.3c0-1.6-.1-2.7-.4-3.9H24v7.1h12c-.2 1.8-1.5 4.6-4.4 6.4l6.7 5.2c4-3.7 6.7-9.1 6.7-14.8Z"/>
+          <path fill="#34A853" d="M24 46c5.8 0 10.7-1.9 14.3-5.2l-6.8-5.3c-1.8 1.3-4.3 2.2-7.5 2.2-5.7 0-10.6-3.8-12.3-9l-7 5.4C8.2 41.2 15.5 46 24 46Z"/>
+          <path fill="#FBBC05" d="M11.7 28.7c-.5-1.3-.7-2.8-.7-4.7s.3-3.4.7-4.7l-7-5.4C3.6 16.9 3 20.4 3 24s.6 7.1 1.7 10.1l7-5.4Z"/>
+          <path fill="#EA4335" d="M24 10.5c4 0 6.8 1.7 8.4 3.2l6.1-6C34.7 4.3 29.8 2 24 2 15.5 2 8.2 6.8 4.7 13.9l7 5.4c1.7-5.2 6.6-9 12.3-9Z"/>
+        </svg>
+        Продолжить с Google
+      </button>
+
+      <div class="or"><span>или почтой</span></div>
+
+      <label class="fld"><span>Почта</span>
+        <input id="auth-login" type="email" placeholder="you@mail.ru" autocomplete="email"></label>
       <label class="fld"><span>Пароль</span>
-        <input id="auth-pass" type="password" placeholder="от 4 символов" autocomplete="current-password"></label>
+        <input id="auth-pass" type="password" placeholder="от 6 символов" autocomplete="current-password"></label>
       <button id="btn-login" class="primary wide">Войти</button>
-      <button id="btn-register" class="wide hidden">Создать аккаунт</button>
+      <button id="btn-register" class="primary wide hidden">Создать аккаунт</button>
+      <button id="btn-reset" class="link">Забыл пароль</button>
       <div id="auth-err" class="err"></div>
-      <div class="or"><span>или</span></div>
-      <button id="btn-guest" class="guest">Войти как гость →</button>
-      <p class="tiny">Данные хранятся только в этом браузере</p>
-      <p id="soon" class="tiny soon hidden">Аккаунты скоро. Пока всё сохраняется в этом браузере —
-        конспекты, карточки и колода останутся на месте после перезагрузки.</p>
+
+      <button id="btn-guest" class="guest">Продолжить без аккаунта →</button>
+      <p class="tiny">Без аккаунта записи живут только в этом браузере.
+        Войдёшь — они переедут в облако и появятся на всех устройствах.</p>
     </div>
   </div>
 </div>
@@ -307,6 +320,11 @@
 <input type="file" id="file-input" multiple hidden>
 <div id="toast" class="toast"></div>
 
-<script src="app.js?v=15"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-storage-compat.js"></script>
+<script src="firebase-config.js?v=16"></script>
+<script src="app.js?v=16"></script>
 </body>
 </html>

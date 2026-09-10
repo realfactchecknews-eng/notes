@@ -60,25 +60,123 @@ function ask(title, value = '', table = false) {
   });
 }
 
-/* ---------- Авторизация (локальная, пароль хранится хешем) ---------- */
-const sha = async t => {
-  const b = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(t));
-  return [...new Uint8Array(b)].map(x => x.toString(16).padStart(2, '0')).join('');
-};
-const users = () => JSON.parse(localStorage.getItem('users') || '{}');
-
-let me = null;          // логин текущего пользователя
-let data = null;        // { folders: [{id,name,open,notes:[{id,title,html,files,ts}]}] }
+/* ---------- Авторизация: Firebase, с гостевым режимом ---------- */
+let me = null;          // uid пользователя или 'гость'
+let user = null;        // объект Firebase, null у гостя
+let data = null;        // { folders: [{id,name,open,notes:[{id,title,html,files,ts}]}], cards, tests }
 let cur = null;         // текущая заметка
 let curFolder = null;
 
-const save = () => db.set('data:' + me, data);
+let fb = null, auth = null, store = null, bucket = null;
+try {
+  if (window.FB && !String(window.FB.apiKey).includes('ВСТАВЬ')) {
+    fb = firebase.initializeApp(window.FB);
+    auth = firebase.auth();
+    store = firebase.firestore();
+    bucket = firebase.storage();
+    store.enablePersistence({ synchronizeTabs: true }).catch(() => {});
+  }
+} catch (e) { console.warn('Firebase не поднялся:', e.message); }
 
-async function enter(login) {
-  me = login;
-  localStorage.setItem('last', login);
-  data = (await db.get('data:' + login)) || { folders: [] };
-  $('#who').textContent = login;
+const cloud = () => !!user;
+const errText = c => ({
+  'auth/invalid-email': 'Неправильная почта',
+  'auth/missing-password': 'Введи пароль',
+  'auth/weak-password': 'Пароль слишком короткий, нужно от 6 символов',
+  'auth/email-already-in-use': 'На эту почту уже есть аккаунт — войди',
+  'auth/invalid-credential': 'Неверная почта или пароль',
+  'auth/user-not-found': 'Такого аккаунта нет',
+  'auth/wrong-password': 'Неверный пароль',
+  'auth/too-many-requests': 'Слишком много попыток, подожди минуту',
+  'auth/popup-closed-by-user': 'Окно Google закрыли',
+  'auth/network-request-failed': 'Нет связи с сервером',
+}[c] || 'Ошибка: ' + c);
+
+/* --- сохранение --- */
+/* Метаданные (папки, карточки, результаты) лежат одним документом,
+   каждый конспект — своим, чтобы не упереться в лимит документа Firestore. */
+const meta = () => ({
+  folders: data.folders.map(f => ({
+    id: f.id, name: f.name, open: !!f.open,
+    notes: f.notes.map(n => ({ id: n.id, title: n.title, ts: n.ts })),
+  })),
+  cards: data.cards || [],
+  tests: data.tests || [],
+});
+
+let saveT, dirty = new Set();
+function save(noteId) {
+  if (noteId) dirty.add(noteId);
+  else if (cur) dirty.add(cur.id);
+  if (!cloud()) return db.set('data:' + me, data);
+  clearTimeout(saveT);
+  saveT = setTimeout(pushCloud, 400);
+  return Promise.resolve();
+}
+
+async function pushCloud() {
+  if (!cloud()) return;
+  const ids = [...dirty]; dirty.clear();
+  try {
+    const batch = store.batch();
+    batch.set(store.doc(`users/${user.uid}`), meta());
+    for (const id of ids) {
+      const n = findNote(id);
+      if (n) batch.set(store.doc(`users/${user.uid}/notes/${id}`),
+        { title: n.title || '', html: n.html || '', files: n.files || [], ts: n.ts || Date.now() });
+    }
+    await batch.commit();
+  } catch (e) { toast('Не сохранилось в облако: ' + e.message); }
+}
+
+function findNote(id) {
+  for (const f of data.folders) { const n = f.notes.find(x => x.id === id); if (n) return n; }
+}
+
+async function dropNote(id) {
+  if (cloud()) store.doc(`users/${user.uid}/notes/${id}`).delete().catch(() => {});
+}
+
+/* --- загрузка --- */
+async function pullCloud() {
+  const [m, ns] = await Promise.all([
+    store.doc(`users/${user.uid}`).get(),
+    store.collection(`users/${user.uid}/notes`).get(),
+  ]);
+  const bodies = {};
+  ns.forEach(d => bodies[d.id] = d.data());
+  const raw = m.exists ? m.data() : { folders: [] };
+  return {
+    folders: (raw.folders || []).map(f => ({
+      ...f,
+      notes: (f.notes || []).map(s => ({ ...s, ...(bodies[s.id] || { html: '', files: [] }) })),
+    })),
+    cards: raw.cards || [],
+    tests: raw.tests || [],
+  };
+}
+
+/* --- вход --- */
+async function enter(who, fbUser) {
+  user = fbUser || null;
+  me = fbUser ? fbUser.uid : 'гость';
+  localStorage.setItem('last', me);
+
+  if (cloud()) {
+    data = await pullCloud();
+    const local = await db.get('data:гость');
+    if (local?.folders?.length && !data.folders.length && confirm(
+      'Перенести записи, созданные без аккаунта, в этот аккаунт?')) {
+      data = local;
+      data.folders.forEach(f => f.notes.forEach(n => dirty.add(n.id)));
+      await pushCloud();
+    }
+  } else {
+    data = (await db.get('data:гость')) || { folders: [] };
+  }
+
+  $('#who').textContent = who;
+  $('#who').title = cloud() ? 'Записи синхронизируются' : 'Только в этом браузере';
   const a = $('#auth');
   a.classList.add('gone');
   setTimeout(() => a.classList.add('hidden'), 340);
@@ -88,26 +186,54 @@ async function enter(login) {
   refreshBadge();
 }
 
+/* --- кнопки --- */
+const creds = () => [$('#auth-login').value.trim(), $('#auth-pass').value];
+
 $('#btn-register').onclick = async () => {
-  const l = $('#auth-login').value.trim(), p = $('#auth-pass').value;
-  if (l.length < 2 || p.length < 4) return err('Логин от 2 символов, пароль от 4');
-  const u = users();
-  if (u[l]) return err('Такой логин уже занят');
-  u[l] = await sha(p);
-  localStorage.setItem('users', JSON.stringify(u));
-  enter(l);
+  if (!auth) return err('Облако ещё не настроено — заходи без аккаунта');
+  const [m, p] = creds();
+  busy(true);
+  try { await auth.createUserWithEmailAndPassword(m, p); }
+  catch (e) { err(errText(e.code)); }
+  busy(false);
 };
 
 $('#btn-login').onclick = async () => {
-  const l = $('#auth-login').value.trim(), p = $('#auth-pass').value;
-  const u = users();
-  if (!u[l]) return err('Нет такого пользователя');
-  if (u[l] !== await sha(p)) return err('Неверный пароль');
-  enter(l);
+  if (!auth) return err('Облако ещё не настроено — заходи без аккаунта');
+  const [m, p] = creds();
+  busy(true);
+  try { await auth.signInWithEmailAndPassword(m, p); }
+  catch (e) { err(errText(e.code)); }
+  busy(false);
+};
+
+$('#btn-google').onclick = async () => {
+  if (!auth) return err('Облако ещё не настроено — заходи без аккаунта');
+  busy(true);
+  try { await auth.signInWithPopup(new firebase.auth.GoogleAuthProvider()); }
+  catch (e) { err(errText(e.code)); }
+  busy(false);
+};
+
+$('#btn-reset').onclick = async () => {
+  const [m] = creds();
+  if (!m) return err('Впиши почту, на неё придёт письмо');
+  try { await auth.sendPasswordResetEmail(m); toast('Письмо для сброса отправлено'); }
+  catch (e) { err(errText(e.code)); }
 };
 
 $('#btn-guest').onclick = () => enter('гость');
 
+function busy(on) {
+  $$('.auth-card button').forEach(b => b.disabled = on);
+  $('#btn-login').textContent = on ? 'Секунду…' : 'Войти';
+}
+
+/* Firebase сам вспоминает, кто вошёл */
+if (auth) auth.onAuthStateChanged(u => {
+  if (u) enter(u.displayName || u.email, u);
+  else if (localStorage.getItem('last') === 'гость') enter('гость');
+});
 
 /* переключение Вход / Регистрация */
 $$('.tab').forEach(t => t.onclick = () => {
@@ -116,6 +242,7 @@ $$('.tab').forEach(t => t.onclick = () => {
   $$('.tab').forEach(x => x.classList.toggle('on', x === t));
   $('#btn-login').classList.toggle('hidden', reg);
   $('#btn-register').classList.toggle('hidden', !reg);
+  $('#btn-reset').classList.toggle('hidden', reg);
   $('#auth-err').textContent = '';
   $('#auth-login').focus();
 });
@@ -123,27 +250,15 @@ const submitAuth = () => ($('.tabs').classList.contains('reg') ? $('#btn-registe
 $('#auth-login').onkeydown = e => e.key === 'Enter' && $('#auth-pass').focus();
 $('#auth-pass').onkeydown = e => e.key === 'Enter' && submitAuth();
 
-/* Регистрация ещё не настроена: вход только гостем.
-   Поставить true — вернутся логин, пароль и вкладки. */
-const ACCOUNTS = false;
-if (!ACCOUNTS) {
-  ['.tabs', '#auth-login', '#auth-pass', '#btn-login', '#btn-register', '.or']
-    .forEach(s => $(s).closest('.fld') ? $(s).closest('.fld').remove() : $(s).remove());
-  const g = $('#btn-guest');
-  g.className = 'primary wide big-guest';
-  g.textContent = 'Войти →';
-  $('#soon').classList.remove('hidden');
-  $('.tiny:not(.soon)').remove();
-}
-
 function err(m) {
   const el = $('#auth-err');
   el.textContent = m;
   el.classList.remove('shake'); void el.offsetWidth; el.classList.add('shake');
 }
 
-$('#btn-logout').onclick = () => {
+$('#btn-logout').onclick = async () => {
   localStorage.removeItem('last');
+  if (auth && user) await auth.signOut();
   location.reload();
 };
 
@@ -192,6 +307,7 @@ function render() {
       }
       if (a === 'del') {
         if (!confirm(`Удалить «${f.name}» со всеми конспектами?`)) return;
+        f.notes.forEach(n => dropNote(n.id));
         data.folders = data.folders.filter(x => x !== f);
         if (curFolder === f) closeNote();
         save(); render();
@@ -246,6 +362,7 @@ function newNote(f) {
 
 function delNote(f, n) {
   if (!confirm('Удалить конспект?')) return;
+  dropNote(n.id);
   f.notes = f.notes.filter(x => x !== n);
   save();
   if (cur === n) closeNote();
@@ -382,9 +499,8 @@ $('#body').addEventListener('paste', e => {
   const img = [...e.clipboardData.items].find(i => i.type.startsWith('image/'));
   if (!img) return;
   e.preventDefault();
-  const r = new FileReader();
-  r.onload = () => insert(`<p><img src="${r.result}"></p>`);
-  r.readAsDataURL(img.getAsFile());
+  const f = img.getAsFile();
+  keep(f, f.name || 'вставка.png').then(src => insert(`<p><img src="${src}"></p>`));
 });
 
 /* ---------- Экспорт в PDF / Word ---------- */
@@ -571,15 +687,30 @@ $('#file-input').onchange = e => {
   for (const f of e.target.files) addFile(f);
   e.target.value = '';
 };
-function addFile(f) {
+async function addFile(f) {
   if (f.size > 20 * 1024 * 1024) return toast(`«${f.name}» больше 20 МБ`);
-  const r = new FileReader();
-  r.onload = () => {
-    if (f.type.startsWith('image/')) insert(`<p><img src="${r.result}"></p>`);
-    else { cur.files.push({ id: uid(), name: f.name, size: f.size, data: r.result }); save(); renderFiles(); }
-    toast('Добавлено: ' + f.name);
-  };
-  r.readAsDataURL(f);
+  toast('Загружаю ' + f.name + '…');
+  const src = await keep(f, f.name);
+  if (f.type.startsWith('image/')) insert(`<p><img src="${src}"></p>`);
+  else { cur.files.push({ id: uid(), name: f.name, size: f.size, data: src }); save(); renderFiles(); }
+  toast('Добавлено: ' + f.name);
+}
+
+/* С аккаунтом файлы уезжают в облачное хранилище и в конспекте остаётся ссылка —
+   иначе картинки в base64 быстро упёрлись бы в лимит документа Firestore. */
+async function keep(blob, name) {
+  if (cloud()) {
+    try {
+      const ref = bucket.ref(`users/${user.uid}/${cur.id}/${uid()}-${name}`);
+      await ref.put(blob);
+      return await ref.getDownloadURL();
+    } catch (e) { toast('Файл остался локально: ' + e.message); }
+  }
+  return await new Promise(res => {
+    const r = new FileReader();
+    r.onload = () => res(r.result);
+    r.readAsDataURL(blob);
+  });
 }
 function renderFiles() {
   const box = $('#files');
@@ -628,8 +759,8 @@ $('#draw-cancel').onclick = () => hide($('#draw-modal'));
 $('#draw-clear').onclick = () => { pushUndo(); ctx.clearRect(0, 0, cv.width, cv.height); };
 $('#draw-undo').onclick = popUndo;
 $('#draw-save').onclick = () => {
-  insert(`<p><img src="${cv.toDataURL('image/png')}"></p>`);
   hide($('#draw-modal'));
+  cv.toBlob(async b => insert(`<p><img src="${await keep(b, 'рисунок.png')}"></p>`), 'image/png');
 };
 $('#pen-mode').onclick = () => setMode(false);
 $('#eraser-mode').onclick = () => setMode(true);
@@ -1102,6 +1233,5 @@ addEventListener('load', () => setTimeout(() => {
   setTimeout(() => b.remove(), 600);
 }, 900));
 
-/* автовход */
-const last = localStorage.getItem('last');
-if (last && (last === 'гость' || users()[last])) enter(last);
+/* если облако не настроено — сразу пускаем гостя */
+if (!auth && localStorage.getItem('last')) enter('гость');

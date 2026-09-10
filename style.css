@@ -471,3 +471,9 @@ input:focus,textarea:focus,select:focus{border-color:var(--acc);box-shadow:0 0 0
 .toast{border-color:#3b82f688;box-shadow:var(--shadow),0 0 30px #1d4ed82e}
 .big-guest{padding:14px;font-size:15.5px;letter-spacing:.3px}
 .soon{line-height:1.6;margin-top:14px}
+.google{display:flex;align-items:center;justify-content:center;gap:9px;padding:11px;
+  background:#0e1626;font-weight:500}
+.google:hover{background:#152136}
+.link{width:100%;border:none;background:none;color:var(--dim);font-size:12.5px;padding:6px}
+.link:hover{background:none;color:var(--acc2);transform:none}
+.auth-card button:disabled{opacity:.55;cursor:default}
