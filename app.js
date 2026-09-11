@@ -5,6 +5,16 @@ const $ = s => document.querySelector(s);
 const $$ = s => [...document.querySelectorAll(s)];
 const uid = () => Math.random().toString(36).slice(2, 10);
 
+/* Firestore при недоступном сервере ждёт молча, поэтому ограничиваем время:
+   лучше открыть локальную копию, чем держать человека на экране входа. */
+const withTimeout = (p, ms) => {
+  p.catch(() => {});                    // гасим отложенный отказ, он уже не нужен
+  return Promise.race([
+    p, new Promise((_, rej) => setTimeout(() => rej(new Error('облако молчит')), ms)),
+  ]);
+};
+
+
 /* ---------- IndexedDB (одно хранилище ключ-значение) ---------- */
 const db = (() => {
   const open = indexedDB.open('notes', 1);
@@ -74,9 +84,13 @@ try {
     auth = firebase.auth();
     store = firebase.firestore();
     bucket = firebase.storage();
+    if (window.FB_EMU) { auth.useEmulator('http://127.0.0.1:9099'); store.useEmulator('127.0.0.1', 8080); }
     store.enablePersistence({ synchronizeTabs: true }).catch(() => {});
   }
-} catch (e) { console.warn('Firebase не поднялся:', e.message); }
+} catch (e) {
+  console.warn('Firebase не поднялся:', e.message);
+  if (!store || !bucket) { auth = store = bucket = null; }
+}
 
 const cloud = () => !!user;
 const errText = c => ({
@@ -108,7 +122,8 @@ let saveT, dirty = new Set();
 function save(noteId) {
   if (noteId) dirty.add(noteId);
   else if (cur) dirty.add(cur.id);
-  if (!cloud()) return db.set('data:' + me, data);
+  db.set('data:' + me, data);          // локальная копия есть всегда
+  if (!cloud()) return Promise.resolve();
   clearTimeout(saveT);
   saveT = setTimeout(pushCloud, 400);
   return Promise.resolve();
@@ -139,10 +154,10 @@ async function dropNote(id) {
 
 /* --- загрузка --- */
 async function pullCloud() {
-  const [m, ns] = await Promise.all([
+  const [m, ns] = await withTimeout(Promise.all([
     store.doc(`users/${user.uid}`).get(),
     store.collection(`users/${user.uid}/notes`).get(),
-  ]);
+  ]), 6000);
   const bodies = {};
   ns.forEach(d => bodies[d.id] = d.data());
   const raw = m.exists ? m.data() : { folders: [] };
@@ -162,17 +177,31 @@ async function enter(who, fbUser) {
   me = fbUser ? fbUser.uid : 'гость';
   localStorage.setItem('last', me);
 
+  /* Ни одна поломка хранилища не должна оставить человека на экране входа:
+     что бы ни отвалилось, открываем приложение хотя бы с пустой библиотекой. */
+  const local = await withTimeout(db.get(cloud() ? 'data:' + me : 'data:гость'), 2000)
+    .catch(() => null);
+
   if (cloud()) {
-    data = await pullCloud();
-    const local = await db.get('data:гость');
-    if (local?.folders?.length && !data.folders.length && confirm(
-      'Перенести записи, созданные без аккаунта, в этот аккаунт?')) {
+    try {
+      data = await pullCloud();
+    } catch (e) {
+      toast('Облако не ответило, работаем с локальной копией');
       data = local;
-      data.folders.forEach(f => f.notes.forEach(n => dirty.add(n.id)));
-      await pushCloud();
     }
   } else {
-    data = (await db.get('data:гость')) || { folders: [] };
+    data = local;
+  }
+  if (!data || !Array.isArray(data.folders)) data = { folders: [] };
+
+  if (cloud() && !data.folders.length) {
+    const guest = await withTimeout(db.get('data:гость'), 2000).catch(() => null);
+    if (guest?.folders?.length &&
+        confirm('Перенести записи, созданные без аккаунта, в этот аккаунт?')) {
+      data = guest;
+      data.folders.forEach(f => f.notes.forEach(n => dirty.add(n.id)));
+      pushCloud();
+    }
   }
 
   $('#who').textContent = who;
