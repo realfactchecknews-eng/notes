@@ -27,6 +27,7 @@ async function hash(password, salt = crypto.getRandomValues(new Uint8Array(16)))
   return `${b64(salt)}:${b64(bits)}`;
 }
 async function verify(password, stored) {
+  if (!stored || !stored.includes(':')) return false;   // аккаунт без пароля, только Google
   const [salt] = stored.split(':');
   const again = await hash(password, unb64(salt));
   /* сравнение без раннего выхода, чтобы не подсказывать время ответа */
@@ -55,6 +56,44 @@ async function open(token, secret) {
 }
 
 const uid = () => crypto.randomUUID().replace(/-/g, '').slice(0, 20);
+
+/* --- проверка токена Google --- */
+/* Google подписывает свой токен ключом из общего набора; сверяем подпись сами,
+   чтобы чужой токен нельзя было выдать за свой. */
+let jwks = { at: 0, keys: [] };
+async function googleKeys() {
+  if (Date.now() - jwks.at < 3600e3 && jwks.keys.length) return jwks.keys;
+  const r = await fetch('https://www.googleapis.com/oauth2/v3/certs');
+  const j = await r.json();
+  jwks = { at: Date.now(), keys: j.keys || [] };
+  return jwks.keys;
+}
+
+const fromB64Url = s => unb64(s.replace(/-/g, '+').replace(/_/g, '/')
+  .padEnd(s.length + (4 - s.length % 4) % 4, '='));
+
+async function checkGoogle(idToken, clientId) {
+  const [h, p, s] = String(idToken || '').split('.');
+  if (!h || !p || !s) throw new Error('Неполный токен Google');
+  const head = JSON.parse(new TextDecoder().decode(fromB64Url(h)));
+  const body = JSON.parse(new TextDecoder().decode(fromB64Url(p)));
+
+  const jwk = (await googleKeys()).find(k => k.kid === head.kid);
+  if (!jwk) throw new Error('Ключ Google не найден');
+
+  const key = await crypto.subtle.importKey('jwk', jwk,
+    { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' }, false, ['verify']);
+  const ok = await crypto.subtle.verify('RSASSA-PKCS1-v1_5', key,
+    fromB64Url(s), enc.encode(`${h}.${p}`));
+
+  if (!ok) throw new Error('Подпись Google не сходится');
+  if (body.aud !== clientId) throw new Error('Токен выдан другому приложению');
+  if (!['accounts.google.com', 'https://accounts.google.com'].includes(body.iss))
+    throw new Error('Неизвестный отправитель токена');
+  if (body.exp < Date.now() / 1000) throw new Error('Токен Google просрочен');
+  if (!body.email_verified) throw new Error('Почта в Google не подтверждена');
+  return body;
+}
 const clean = s => String(s || '').trim().toLowerCase();
 
 export default {
@@ -89,6 +128,30 @@ export default {
         const u = await env.DB.prepare('SELECT id, hash FROM users WHERE email = ?').bind(mail).first();
         if (!u || !await verify(password, u.hash)) return bad('Неверная почта или пароль', 401);
         return json({ token: await sign({ id: u.id, email: mail, exp: Date.now() / 1000 + TTL }, secret), email: mail });
+      }
+
+      /* ---- вход через Google ---- */
+      if (path === '/google' && req.method === 'POST') {
+        if (!env.GOOGLE_CLIENT_ID) return bad('Вход через Google пока не включён', 503);
+        const { credential } = await req.json();
+        const g = await checkGoogle(credential, env.GOOGLE_CLIENT_ID);
+        const mail = clean(g.email);
+
+        let u = await env.DB.prepare('SELECT id FROM users WHERE email = ?').bind(mail).first();
+        if (!u) {
+          const id = uid();
+          await env.DB.prepare('INSERT INTO users (id, email, hash, made, google) VALUES (?, ?, ?, ?, ?)')
+            .bind(id, mail, '', Date.now(), g.sub).run();
+          u = { id };
+        } else {
+          await env.DB.prepare('UPDATE users SET google = ? WHERE id = ?').bind(g.sub, u.id).run();
+        }
+        return json({ token: await sign({ id: u.id, email: mail, exp: Date.now() / 1000 + TTL }, secret), email: mail });
+      }
+
+      /* ---- включён ли вход через Google ---- */
+      if (path === '/config' && req.method === 'GET') {
+        return json({ googleClientId: env.GOOGLE_CLIENT_ID || null });
       }
 
       /* ---- дальше только со своим токеном ---- */

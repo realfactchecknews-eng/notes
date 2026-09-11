@@ -479,3 +479,5 @@ input:focus,textarea:focus,select:focus{border-color:var(--acc);box-shadow:0 0 0
 .auth-card button:disabled{opacity:.55;cursor:default}
 .who.offline{color:#fbbf24}
 .who.offline:after{content:" ●";font-size:9px}
+.g-wrap{margin-bottom:4px}
+#g-btn{display:flex;justify-content:center}

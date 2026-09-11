@@ -230,6 +230,37 @@ function busy(on) {
   $('#btn-register').textContent = on ? 'Секунду…' : 'Создать аккаунт';
 }
 
+/* --- вход через Google --- */
+/* Кнопку рисует сам Google; показываем её, только если на сервере задан Client ID. */
+(async () => {
+  try {
+    const { googleClientId } = await api('/config');
+    if (!googleClientId) return;
+    await new Promise((ok, no) => {
+      const s = document.createElement('script');
+      s.src = 'https://accounts.google.com/gsi/client';
+      s.onload = ok; s.onerror = () => no(new Error('Google не загрузился'));
+      document.head.appendChild(s);
+    });
+    google.accounts.id.initialize({
+      client_id: googleClientId,
+      callback: async ({ credential }) => {
+        busy(true);
+        try {
+          const r = await api('/google', 'POST', { credential });
+          await enter(r.email, r.token);
+        } catch (e) { err(e.message); }
+        busy(false);
+      },
+    });
+    google.accounts.id.renderButton($('#g-btn'), {
+      theme: 'filled_black', size: 'large', width: 282,
+      text: 'continue_with', shape: 'pill', locale: 'ru',
+    });
+    $('#g-wrap').classList.remove('hidden');
+  } catch { /* без Google просто остаётся вход по почте */ }
+})();
+
 /* переключение Вход / Регистрация */
 $$('.tab').forEach(t => t.onclick = () => {
   const reg = t.dataset.tab === 'reg';
