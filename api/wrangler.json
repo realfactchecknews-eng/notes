@@ -1,0 +1,8 @@
+{
+  "name": "clarity-api",
+  "main": "worker.js",
+  "compatibility_date": "2026-01-01",
+  "d1_databases": [
+    { "binding": "DB", "database_name": "clarity-db", "database_id": "e69da51b-55dd-46b1-b96e-b5e441724fc6" }
+  ]
+}

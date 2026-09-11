@@ -70,45 +70,34 @@ function ask(title, value = '', table = false) {
   });
 }
 
-/* ---------- Авторизация: Firebase, с гостевым режимом ---------- */
-let me = null;          // uid пользователя или 'гость'
-let user = null;        // объект Firebase, null у гостя
-let data = null;        // { folders: [{id,name,open,notes:[{id,title,html,files,ts}]}], cards, tests }
-let cur = null;         // текущая заметка
+/* ---------- Авторизация: свой сервер на Cloudflare, с гостевым режимом ---------- */
+const API = 'https://clarity-api.realfactchecknews.workers.dev';
+
+let me = null;          // почта пользователя или 'гость'
+let token = null;       // ключ сессии, null у гостя
+let data = null;        // { folders: [...], cards, tests }
+let cur = null;
 let curFolder = null;
 
-let fb = null, auth = null, store = null, bucket = null;
-try {
-  if (window.FB && !String(window.FB.apiKey).includes('ВСТАВЬ')) {
-    fb = firebase.initializeApp(window.FB);
-    auth = firebase.auth();
-    store = firebase.firestore();
-    bucket = firebase.storage();
-    if (window.FB_EMU) { auth.useEmulator('http://127.0.0.1:9099'); store.useEmulator('127.0.0.1', 8080); }
-    store.enablePersistence({ synchronizeTabs: true }).catch(() => {});
-  }
-} catch (e) {
-  console.warn('Firebase не поднялся:', e.message);
-  if (!store || !bucket) { auth = store = bucket = null; }
+const cloud = () => !!token;
+
+async function api(path, method = 'GET', body) {
+  const r = await withTimeout(fetch(API + path, {
+    method,
+    headers: {
+      'content-type': 'application/json',
+      ...(token ? { authorization: 'Bearer ' + token } : {}),
+    },
+    body: body ? JSON.stringify(body) : undefined,
+  }), 12000);
+  const j = await r.json().catch(() => ({ error: 'сервер ответил невнятно' }));
+  if (!r.ok) throw new Error(j.error || 'ошибка ' + r.status);
+  return j;
 }
 
-const cloud = () => !!user;
-const errText = c => ({
-  'auth/invalid-email': 'Неправильная почта',
-  'auth/missing-password': 'Введи пароль',
-  'auth/weak-password': 'Пароль слишком короткий, нужно от 6 символов',
-  'auth/email-already-in-use': 'На эту почту уже есть аккаунт — войди',
-  'auth/invalid-credential': 'Неверная почта или пароль',
-  'auth/user-not-found': 'Такого аккаунта нет',
-  'auth/wrong-password': 'Неверный пароль',
-  'auth/too-many-requests': 'Слишком много попыток, подожди минуту',
-  'auth/popup-closed-by-user': 'Окно Google закрыли',
-  'auth/network-request-failed': 'Нет связи с сервером',
-}[c] || 'Ошибка: ' + c);
-
 /* --- сохранение --- */
-/* Метаданные (папки, карточки, результаты) лежат одним документом,
-   каждый конспект — своим, чтобы не упереться в лимит документа Firestore. */
+/* Папки, карточки и результаты тестов уходят одним куском,
+   конспекты — только те, что менялись: так синхронизация остаётся лёгкой. */
 const meta = () => ({
   folders: data.folders.map(f => ({
     id: f.id, name: f.name, open: !!f.open,
@@ -118,53 +107,57 @@ const meta = () => ({
   tests: data.tests || [],
 });
 
-let saveT, dirty = new Set();
+let saveT, dirty = new Set(), dropped = new Set();
+
 function save(noteId) {
   if (noteId) dirty.add(noteId);
   else if (cur) dirty.add(cur.id);
   db.set('data:' + me, data);          // локальная копия есть всегда
   if (!cloud()) return Promise.resolve();
   clearTimeout(saveT);
-  saveT = setTimeout(pushCloud, 400);
+  saveT = setTimeout(pushCloud, 1200);
   return Promise.resolve();
 }
 
 async function pushCloud() {
   if (!cloud()) return;
-  const ids = [...dirty]; dirty.clear();
+  const ids = [...dirty], drop = [...dropped];
+  dirty.clear(); dropped.clear();
+  const notes = {};
+  for (const id of ids) {
+    const n = findNote(id);
+    if (n) notes[id] = { title: n.title || '', html: n.html || '', files: n.files || [], ts: n.ts || Date.now() };
+  }
   try {
-    const batch = store.batch();
-    batch.set(store.doc(`users/${user.uid}`), meta());
-    for (const id of ids) {
-      const n = findNote(id);
-      if (n) batch.set(store.doc(`users/${user.uid}/notes/${id}`),
-        { title: n.title || '', html: n.html || '', files: n.files || [], ts: n.ts || Date.now() });
-    }
-    await batch.commit();
-  } catch (e) { toast('Не сохранилось в облако: ' + e.message); }
+    await api('/data', 'PUT', { meta: meta(), notes, drop });
+    syncMark(true);
+  } catch (e) {
+    /* вернём в очередь — уйдёт при следующем сохранении или входе */
+    ids.forEach(i => dirty.add(i));
+    drop.forEach(i => dropped.add(i));
+    syncMark(false, e.message);
+  }
 }
 
 function findNote(id) {
   for (const f of data.folders) { const n = f.notes.find(x => x.id === id); if (n) return n; }
 }
+const dropNote = id => { dropped.add(id); };
 
-async function dropNote(id) {
-  if (cloud()) store.doc(`users/${user.uid}/notes/${id}`).delete().catch(() => {});
+function syncMark(ok, why) {
+  const el = $('#who');
+  el.classList.toggle('offline', !ok);
+  el.title = ok ? 'Записи синхронизированы' : 'Не сохранилось на сервер: ' + why;
 }
 
 /* --- загрузка --- */
 async function pullCloud() {
-  const [m, ns] = await withTimeout(Promise.all([
-    store.doc(`users/${user.uid}`).get(),
-    store.collection(`users/${user.uid}/notes`).get(),
-  ]), 6000);
-  const bodies = {};
-  ns.forEach(d => bodies[d.id] = d.data());
-  const raw = m.exists ? m.data() : { folders: [] };
+  const { meta: m, notes } = await api('/data');
+  const raw = m || { folders: [] };
   return {
     folders: (raw.folders || []).map(f => ({
       ...f,
-      notes: (f.notes || []).map(s => ({ ...s, ...(bodies[s.id] || { html: '', files: [] }) })),
+      notes: (f.notes || []).map(s => ({ ...s, ...(notes[s.id] || { html: '', files: [] }) })),
     })),
     cards: raw.cards || [],
     tests: raw.tests || [],
@@ -172,28 +165,28 @@ async function pullCloud() {
 }
 
 /* --- вход --- */
-async function enter(who, fbUser) {
-  user = fbUser || null;
-  me = fbUser ? fbUser.uid : 'гость';
-  localStorage.setItem('last', me);
+async function enter(who, tok) {
+  token = tok || null;
+  me = who;
+  localStorage.setItem('last', who);
+  if (tok) localStorage.setItem('token', tok);
 
-  /* Ни одна поломка хранилища не должна оставить человека на экране входа:
-     что бы ни отвалилось, открываем приложение хотя бы с пустой библиотекой. */
-  const local = await withTimeout(db.get(cloud() ? 'data:' + me : 'data:гость'), 2000)
-    .catch(() => null);
+  const local = await withTimeout(db.get('data:' + me), 2000).catch(() => null);
 
   if (cloud()) {
     try {
       data = await pullCloud();
     } catch (e) {
-      toast('Облако не ответило, работаем с локальной копией');
+      toast('Сервер не ответил, работаем с локальной копией');
       data = local;
+      syncMark(false, e.message);
     }
   } else {
     data = local;
   }
   if (!data || !Array.isArray(data.folders)) data = { folders: [] };
 
+  /* записи, сделанные до входа, предлагаем забрать с собой */
   if (cloud() && !data.folders.length) {
     const guest = await withTimeout(db.get('data:гость'), 2000).catch(() => null);
     if (guest?.folders?.length &&
@@ -205,7 +198,7 @@ async function enter(who, fbUser) {
   }
 
   $('#who').textContent = who;
-  $('#who').title = cloud() ? 'Записи синхронизируются' : 'Только в этом браузере';
+  if (cloud()) syncMark(true); else $('#who').title = 'Только в этом браузере';
   const a = $('#auth');
   a.classList.add('gone');
   setTimeout(() => a.classList.add('hidden'), 340);
@@ -216,53 +209,26 @@ async function enter(who, fbUser) {
 }
 
 /* --- кнопки --- */
-const creds = () => [$('#auth-login').value.trim(), $('#auth-pass').value];
+const creds = () => ({ email: $('#auth-login').value.trim(), password: $('#auth-pass').value });
 
-$('#btn-register').onclick = async () => {
-  if (!auth) return err('Облако ещё не настроено — заходи без аккаунта');
-  const [m, p] = creds();
+async function doAuth(path) {
   busy(true);
-  try { await auth.createUserWithEmailAndPassword(m, p); }
-  catch (e) { err(errText(e.code)); }
+  try {
+    const r = await api(path, 'POST', creds());
+    await enter(r.email, r.token);
+  } catch (e) { err(e.message); }
   busy(false);
-};
+}
 
-$('#btn-login').onclick = async () => {
-  if (!auth) return err('Облако ещё не настроено — заходи без аккаунта');
-  const [m, p] = creds();
-  busy(true);
-  try { await auth.signInWithEmailAndPassword(m, p); }
-  catch (e) { err(errText(e.code)); }
-  busy(false);
-};
-
-$('#btn-google').onclick = async () => {
-  if (!auth) return err('Облако ещё не настроено — заходи без аккаунта');
-  busy(true);
-  try { await auth.signInWithPopup(new firebase.auth.GoogleAuthProvider()); }
-  catch (e) { err(errText(e.code)); }
-  busy(false);
-};
-
-$('#btn-reset').onclick = async () => {
-  const [m] = creds();
-  if (!m) return err('Впиши почту, на неё придёт письмо');
-  try { await auth.sendPasswordResetEmail(m); toast('Письмо для сброса отправлено'); }
-  catch (e) { err(errText(e.code)); }
-};
-
+$('#btn-register').onclick = () => doAuth('/register');
+$('#btn-login').onclick = () => doAuth('/login');
 $('#btn-guest').onclick = () => enter('гость');
 
 function busy(on) {
   $$('.auth-card button').forEach(b => b.disabled = on);
   $('#btn-login').textContent = on ? 'Секунду…' : 'Войти';
+  $('#btn-register').textContent = on ? 'Секунду…' : 'Создать аккаунт';
 }
-
-/* Firebase сам вспоминает, кто вошёл */
-if (auth) auth.onAuthStateChanged(u => {
-  if (u) enter(u.displayName || u.email, u);
-  else if (localStorage.getItem('last') === 'гость') enter('гость');
-});
 
 /* переключение Вход / Регистрация */
 $$('.tab').forEach(t => t.onclick = () => {
@@ -271,7 +237,6 @@ $$('.tab').forEach(t => t.onclick = () => {
   $$('.tab').forEach(x => x.classList.toggle('on', x === t));
   $('#btn-login').classList.toggle('hidden', reg);
   $('#btn-register').classList.toggle('hidden', !reg);
-  $('#btn-reset').classList.toggle('hidden', reg);
   $('#auth-err').textContent = '';
   $('#auth-login').focus();
 });
@@ -279,15 +244,18 @@ const submitAuth = () => ($('.tabs').classList.contains('reg') ? $('#btn-registe
 $('#auth-login').onkeydown = e => e.key === 'Enter' && $('#auth-pass').focus();
 $('#auth-pass').onkeydown = e => e.key === 'Enter' && submitAuth();
 
+/* уходим со страницы — дописываем несохранённое */
+addEventListener('beforeunload', () => { if (cloud() && dirty.size) pushCloud(); });
+
 function err(m) {
   const el = $('#auth-err');
   el.textContent = m;
   el.classList.remove('shake'); void el.offsetWidth; el.classList.add('shake');
 }
 
-$('#btn-logout').onclick = async () => {
+$('#btn-logout').onclick = () => {
   localStorage.removeItem('last');
-  if (auth && user) await auth.signOut();
+  localStorage.removeItem('token');
   location.reload();
 };
 
@@ -725,21 +693,25 @@ async function addFile(f) {
   toast('Добавлено: ' + f.name);
 }
 
-/* С аккаунтом файлы уезжают в облачное хранилище и в конспекте остаётся ссылка —
-   иначе картинки в base64 быстро упёрлись бы в лимит документа Firestore. */
+/* Картинки лежат внутри конспекта, поэтому крупные ужимаем —
+   иначе один снимок с телефона раздует запись на несколько мегабайт. */
 async function keep(blob, name) {
-  if (cloud()) {
-    try {
-      const ref = bucket.ref(`users/${user.uid}/${cur.id}/${uid()}-${name}`);
-      await ref.put(blob);
-      return await ref.getDownloadURL();
-    } catch (e) { toast('Файл остался локально: ' + e.message); }
-  }
-  return await new Promise(res => {
+  const asData = b => new Promise(res => {
     const r = new FileReader();
     r.onload = () => res(r.result);
-    r.readAsDataURL(blob);
+    r.readAsDataURL(b);
   });
+  if (!blob.type.startsWith('image/') || blob.size < 400 * 1024) return asData(blob);
+  try {
+    const bmp = await createImageBitmap(blob);
+    const k = Math.min(1, 1600 / Math.max(bmp.width, bmp.height));
+    const c = document.createElement('canvas');
+    c.width = Math.round(bmp.width * k);
+    c.height = Math.round(bmp.height * k);
+    c.getContext('2d').drawImage(bmp, 0, 0, c.width, c.height);
+    const small = await new Promise(r => c.toBlob(r, 'image/jpeg', 0.82));
+    return asData(small.size < blob.size ? small : blob);
+  } catch { return asData(blob); }
 }
 function renderFiles() {
   const box = $('#files');
@@ -1262,5 +1234,8 @@ addEventListener('load', () => setTimeout(() => {
   setTimeout(() => b.remove(), 600);
 }, 900));
 
-/* если облако не настроено — сразу пускаем гостя */
-if (!auth && localStorage.getItem('last')) enter('гость');
+/* возвращаемся туда же, где были в прошлый раз */
+const last = localStorage.getItem('last');
+const saved = localStorage.getItem('token');
+if (last === 'гость') enter('гость');
+else if (last && saved) enter(last, saved);
