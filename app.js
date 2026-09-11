@@ -585,6 +585,8 @@ img{max-width:100%;border:1px solid #dbeafe;border-radius:2mm;margin:3mm 0}
 hr{border:none;height:1px;background:#dbeafe;margin:6mm 0}
 .att{font-size:10pt;color:#64748b;margin-top:5mm;font-family:Arial,sans-serif}
 .att b{color:#1d4ed8}
+.sign{margin-top:12mm;padding-top:4mm;border-top:1px solid #dbeafe;text-align:center;
+  font:9.5pt Arial,sans-serif;letter-spacing:2px;color:#93a3bd;text-transform:uppercase}
 `;
 
 /* колба картинкой — SVG документы Word не понимает, поэтому переводим в PNG */
@@ -658,9 +660,12 @@ function buildDoc(notes, subject, withToc, forWord, logo) {
 async function docPage(notes, subject, withToc, forWord) {
   const logo = await logoPng();
   const { cover, tocBlock, body } = buildDoc(notes, subject, withToc, forWord, logo);
-  /* в Word position:fixed не повторяется по страницам, поэтому знак только на обложке */
-  const wm = `<div class="wm"${forWord ? ' style="position:absolute;top:150mm;right:6mm"' : ''}>
-      ${logo ? `<img src="${logo}">` : ''}<span>CLARITY</span></div>`;
+  /* В Word знак не повторяется по страницам и наползает на обложку,
+     поэтому там вместо него — подпись в конце документа. */
+  const wm = forWord ? '' :
+    `<div class="wm">${logo ? `<img src="${logo}">` : ''}<span>CLARITY</span></div>`;
+  const sign = forWord
+    ? '<p class="sign">Сделано в Clarity · clarityapp.ru</p>' : '';
   /* для .doc разрывы уже расставлены явно — убираем те, что Word размножает по абзацам */
   const css = forWord
     ? DOC_CSS.replace(/^\.toc\{page-break-before:always\}$/m, '.toc{}')
@@ -669,7 +674,7 @@ async function docPage(notes, subject, withToc, forWord) {
     : DOC_CSS;
   return `<!DOCTYPE html><html lang="ru"><head><meta charset="utf-8">
     <title>${esc(subject)}</title><style>${css}</style></head>
-    <body>${wm}<div class="page">${cover}${tocBlock}${body}</div></body></html>`;
+    <body>${wm}<div class="page">${cover}${tocBlock}${body}${sign}</div></body></html>`;
 }
 
 function expTargets() {
@@ -1258,12 +1263,18 @@ function htmlToText(html) {
   return d.innerText;
 }
 
-/* убираем экран загрузки, когда всё готово */
-addEventListener('load', () => setTimeout(() => {
+/* Убираем экран загрузки. Слушатель load может опоздать (страница уже готова
+   или вернулась из кэша), поэтому снимаем заставку по нескольким поводам. */
+function dropBoot() {
   const b = $('#boot');
+  if (!b) return;
   b.classList.add('done');
   setTimeout(() => b.remove(), 600);
-}, 900));
+}
+setTimeout(dropBoot, 1400);
+addEventListener('load', () => setTimeout(dropBoot, 900));
+addEventListener('pageshow', () => setTimeout(dropBoot, 900));
+if (document.readyState === 'complete') setTimeout(dropBoot, 900);
 
 /* возвращаемся туда же, где были в прошлый раз */
 const last = localStorage.getItem('last');
