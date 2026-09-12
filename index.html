@@ -9,7 +9,7 @@
 <link rel="apple-touch-icon" href="favicon.svg">
 <meta name="theme-color" content="#080c16">
 <meta name="description" content="Clarity — конспекты по предметам: папки, рисование от руки, файлы, карточки, тесты и ИИ-ассистент.">
-<link rel="stylesheet" href="style.css?v=22">
+<link rel="stylesheet" href="style.css?v=23">
 </head>
 <body>
 
@@ -36,8 +36,16 @@
 <div id="auth" class="auth">
   <div class="blobs"><i></i><i></i><i></i></div>
 
-  <div class="auth-wrap">
-    <div class="hero">
+  <!-- выбор: гостем или с аккаунтом -->
+  <div id="gate" class="gate">
+    <button class="half" data-go="guest">
+      <span class="half-in"><b>Гостем</b><i>без регистрации</i></span>
+    </button>
+    <button class="half" data-go="account">
+      <span class="half-in"><b>Аккаунт</b><i>на всех устройствах</i></span>
+    </button>
+
+    <div class="gate-mid">
       <svg class="flask" viewBox="0 0 120 148" width="132" height="163" aria-hidden="true">
         <defs>
           <linearGradient id="fl-liq" x1="26" y1="58" x2="94" y2="126" gradientUnits="userSpaceOnUse">
@@ -84,40 +92,30 @@
         </g>
       </svg>
       <h1>Clarity</h1>
-      <p class="tag">Ясность в учёбе: конспекты, карточки и тесты в одном месте</p>
-      <div class="feats">
-        <span>📁 Папки по предметам</span>
-        <span>✏️ Рисование от руки</span>
-        <span>📎 Файлы и картинки</span>
-        <span>🎴 Карточки и тесты</span>
-        <span>✨ ИИ-ассистент</span>
-      </div>
+    </div>
+  </div>
+
+  <!-- форма -->
+  <div id="form" class="auth-card hidden">
+    <button id="back" class="back">←</button>
+    <div class="tabs">
+      <button class="tab on" data-tab="login">Вход</button>
+      <button class="tab" data-tab="reg">Регистрация</button>
+      <span class="tab-ink"></span>
     </div>
 
-    <div class="auth-card">
-      <div class="tabs">
-        <button class="tab on" data-tab="login">Вход</button>
-        <button class="tab" data-tab="reg">Регистрация</button>
-        <span class="tab-ink"></span>
-      </div>
-
-      <div id="g-wrap" class="g-wrap hidden">
-        <div id="g-btn"></div>
-        <div class="or"><span>или почтой</span></div>
-      </div>
-
-      <label class="fld"><span>Почта</span>
-        <input id="auth-login" type="email" placeholder="you@mail.ru" autocomplete="email"></label>
-      <label class="fld"><span>Пароль</span>
-        <input id="auth-pass" type="password" placeholder="от 6 символов" autocomplete="current-password"></label>
-      <button id="btn-login" class="primary wide">Войти</button>
-      <button id="btn-register" class="primary wide hidden">Создать аккаунт</button>
-      <div id="auth-err" class="err"></div>
-
-      <button id="btn-guest" class="guest">Продолжить без аккаунта →</button>
-      <p class="tiny">Без аккаунта записи живут только в этом браузере.
-        Войдёшь — они переедут в облако и появятся на всех устройствах.</p>
+    <div id="g-wrap" class="g-wrap hidden">
+      <div id="g-btn"></div>
+      <div class="or"><span>или почтой</span></div>
     </div>
+
+    <label class="fld"><span>Почта</span>
+      <input id="auth-login" type="email" autocomplete="email"></label>
+    <label class="fld"><span>Пароль</span>
+      <input id="auth-pass" type="password" autocomplete="current-password"></label>
+    <button id="btn-login" class="primary wide">Войти</button>
+    <button id="btn-register" class="primary wide hidden">Создать аккаунт</button>
+    <div id="auth-err" class="err"></div>
   </div>
 </div>
 
@@ -132,6 +130,7 @@
     <div class="views">
       <button id="v-notes" class="on">📓 Конспекты</button>
       <button id="v-study">🎓 Учить<span id="due-badge" class="badge hidden"></span></button>
+      <button id="v-me">👤</button>
     </div>
     <input id="search" class="search" placeholder="Поиск…">
     <div id="tree" class="tree"></div>
@@ -177,6 +176,9 @@
       <div id="meta" class="meta"></div>
       <div id="saved" class="saved">сохранено</div>
     </div>
+
+    <!-- ЛИЧНЫЙ КАБИНЕТ -->
+    <div id="profile" class="study hidden"></div>
 
     <!-- УЧЁБА -->
     <div id="study" class="study hidden">
@@ -255,7 +257,7 @@
 <div id="set-modal" class="modal hidden">
   <div class="modal-box">
     <h3>Настройки ИИ</h3>
-    <p class="hint">ИИ уже работает — общий ключ вшит в приложение. Поле ниже нужно, только если хочешь подставить свой ключ с console.groq.com/keys (хранится в твоём браузере).</p>
+    <p class="hint">Свой ключ Groq — если нужен. Хранится в браузере.</p>
     <input id="api-key" placeholder="свой ключ gsk_… (необязательно)">
     <select id="api-model">
       <option value="openai/gpt-oss-120b">gpt-oss-120b (умная)</option>
@@ -274,13 +276,12 @@
 <div id="exp-modal" class="modal hidden">
   <div class="modal-box">
     <h3>Экспорт</h3>
-    <p class="hint">Готовый документ: обложка, автоматическое содержание, водяной знак и оформление в стиле приложения.</p>
     <div class="row-2">
       <label class="pick"><input type="radio" name="scope" value="note" checked><b>Этот конспект</b></label>
       <label class="pick"><input type="radio" name="scope" value="folder"><b>Весь предмет</b></label>
     </div>
     <label class="chk"><input type="checkbox" id="exp-toc" checked> Содержание в начале</label>
-    <p class="warn">В окне печати открой <b>«Ещё параметры»</b> и сними галочку <b>«Колонтитулы»</b> — иначе браузер напечатает по углам свой адрес, дату и номера страниц. Достаточно сделать один раз.</p>
+    <p class="warn">В окне печати сними галочку <b>«Колонтитулы»</b>.</p>
     <div class="row">
       <button id="exp-cancel">Отмена</button>
       <button id="exp-word">Word (.doc)</button>
@@ -313,6 +314,6 @@
 <input type="file" id="file-input" multiple hidden>
 <div id="toast" class="toast"></div>
 
-<script src="app.js?v=22"></script>
+<script src="app.js?v=23"></script>
 </body>
 </html>

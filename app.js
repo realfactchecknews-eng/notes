@@ -221,8 +221,29 @@ async function doAuth(path) {
 }
 
 $('#btn-register').onclick = () => doAuth('/register');
+
+/* Гость решил завести аккаунт: регистрируем и забираем его записи с собой. */
+async function upgrade() {
+  const email = await ask('Почта для аккаунта');
+  if (!email) return;
+  const password = await ask('Пароль (от 6 символов)');
+  if (!password) return;
+  const keep = data;
+  try {
+    const r = await api('/register', 'POST', { email, password });
+    token = r.token; me = r.email;
+    localStorage.setItem('token', r.token);
+    localStorage.setItem('last', r.email);
+    data = keep;
+    data.folders.forEach(f => f.notes.forEach(n => dirty.add(n.id)));
+    await pushCloud();
+    $('#who').textContent = r.email;
+    syncMark(true);
+    toast('Аккаунт создан, записи перенесены');
+    drawProfile();
+  } catch (e) { toast(e.message); }
+}
 $('#btn-login').onclick = () => doAuth('/login');
-$('#btn-guest').onclick = () => enter('гость');
 
 function busy(on) {
   $$('.auth-card button').forEach(b => b.disabled = on);
@@ -260,6 +281,31 @@ function busy(on) {
     $('#g-wrap').classList.remove('hidden');
   } catch { /* без Google просто остаётся вход по почте */ }
 })();
+
+/* --- выбор на входе: гостем или с аккаунтом --- */
+$$('.half').forEach(h => h.onclick = () => {
+  if (h.dataset.go === 'guest') return enter('гость');
+  $('#gate').classList.add('leaving');
+  setTimeout(() => {
+    $('#gate').classList.add('hidden');
+    $('#form').classList.remove('hidden');
+    $('[data-tab=reg]').click();
+  }, 320);
+});
+$('#back').onclick = () => {
+  $('#form').classList.add('hidden');
+  $('#gate').classList.remove('hidden', 'leaving');
+};
+
+/* свайп в сторону выбирает половину */
+let swipeX = null;
+$('#gate').addEventListener('touchstart', e => swipeX = e.touches[0].clientX, { passive: true });
+$('#gate').addEventListener('touchend', e => {
+  if (swipeX === null) return;
+  const d = e.changedTouches[0].clientX - swipeX;
+  swipeX = null;
+  if (Math.abs(d) > 60) $$('.half')[d > 0 ? 0 : 1].click();
+});
 
 /* переключение Вход / Регистрация */
 $$('.tab').forEach(t => t.onclick = () => {
@@ -402,7 +448,7 @@ function delNote(f, n) {
 /* ---------- Редактор ---------- */
 function openNote(f, n) {
   curFolder = f; cur = n;
-  if (!$('#study').classList.contains('hidden')) view(false);
+  if (!$('#study').classList.contains('hidden') || !$('#profile').classList.contains('hidden')) view('notes');
   $('#empty').classList.add('hidden');
   const ed = $('#editor');
   ed.classList.remove('hidden', 'in'); void ed.offsetWidth; ed.classList.add('in');
@@ -966,18 +1012,103 @@ function refreshBadge() {
 }
 
 /* --- переключение разделов --- */
-function view(study) {
-  $('#v-notes').classList.toggle('on', !study);
-  $('#v-study').classList.toggle('on', study);
-  $('#study').classList.toggle('hidden', !study);
-  $('#editor').classList.toggle('hidden', study || !cur);
-  $('#empty').classList.toggle('hidden', study || !!cur);
-  $('.tree').classList.toggle('dim', study);
-  if (study) { fillPickers(); drawCards(); }
+function view(mode) {
+  const notes = mode === 'notes';
+  $('#v-notes').classList.toggle('on', notes);
+  $('#v-study').classList.toggle('on', mode === 'study');
+  $('#v-me').classList.toggle('on', mode === 'me');
+  $('#study').classList.toggle('hidden', mode !== 'study');
+  $('#profile').classList.toggle('hidden', mode !== 'me');
+  $('#editor').classList.toggle('hidden', !notes || !cur);
+  $('#empty').classList.toggle('hidden', !notes || !!cur);
+  $('.tree').classList.toggle('dim', !notes);
+  if (mode === 'study') { fillPickers(); drawCards(); }
+  if (mode === 'me') drawProfile();
   closeSidebar();
 }
-$('#v-notes').onclick = () => view(false);
-$('#v-study').onclick = () => view(true);
+$('#v-notes').onclick = () => view('notes');
+$('#v-study').onclick = () => view('study');
+$('#v-me').onclick = () => view('me');
+
+/* --- личный кабинет --- */
+function drawProfile() {
+  const notes = data.folders.flatMap(f => f.notes);
+  const words = notes.reduce((s, n) => s + (htmlToText(n.html).match(/[\p{L}\p{N}]+/gu) || []).length, 0);
+  const cs = data.cards || [], ts = data.tests || [];
+  const learned = cs.filter(c => c.box >= 4).length;
+  const avg = ts.length ? Math.round(ts.reduce((s, t) => s + t.right / t.total, 0) / ts.length * 100) : 0;
+
+  /* активность за последние 5 недель по дням правок */
+  const days = [];
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  for (let i = 34; i >= 0; i--) {
+    const d = new Date(today - i * DAY);
+    const n = notes.filter(x => new Date(x.ts).toDateString() === d.toDateString()).length;
+    days.push({ d, n });
+  }
+  const streak = (() => {
+    let k = 0;
+    for (let i = days.length - 1; i >= 0 && days[i].n; i--) k++;
+    return k;
+  })();
+
+  $('#profile').innerHTML = `
+    <div class="me-head">
+      <div class="me-ava">${esc((me || '?')[0].toUpperCase())}</div>
+      <div>
+        <div class="me-name">${esc(me)}</div>
+        <div class="me-sub">${cloud() ? 'Записи синхронизируются' : 'Только в этом браузере'}</div>
+      </div>
+    </div>
+
+    ${cloud() ? '' : `<div class="me-call">
+      <div><b>Заведи аккаунт</b><span>Конспекты переедут в облако и откроются с телефона</span></div>
+      <button id="me-up" class="primary">Создать</button></div>`}
+
+    <div class="stats">
+      <div class="stat"><b>${data.folders.length}</b><i>предметов</i></div>
+      <div class="stat"><b>${notes.length}</b><i>конспектов</i></div>
+      <div class="stat"><b>${words}</b><i>слов написано</i></div>
+      <div class="stat"><b>${cs.length}</b><i>карточек</i></div>
+      <div class="stat"><b>${learned}</b><i>терминов выучено</i></div>
+      <div class="stat"><b>${ts.length}</b><i>тестов пройдено</i></div>
+    </div>
+
+    <div class="me-row">
+      <div class="me-box">
+        <div class="me-t">Средний результат тестов</div>
+        <div class="ring" style="--p:${avg}"><b>${avg}<span>%</span></b></div>
+      </div>
+      <div class="me-box">
+        <div class="me-t">Активность за месяц</div>
+        <div class="heat">${days.map(x =>
+          `<i class="lv${Math.min(x.n, 3)}" title="${x.d.toLocaleDateString('ru')}: ${x.n}"></i>`).join('')}</div>
+        <div class="me-sub">${streak ? `Подряд дней: ${streak}` : 'Сегодня ещё ничего не писал'}</div>
+      </div>
+    </div>
+
+    ${ts.length ? `<div class="me-box">
+      <div class="me-t">Последние тесты</div>
+      <div class="hist">${ts.slice(0, 6).map(t => `<div><span>${esc(t.title)}</span>
+        <b>${t.right}/${t.total}</b><i>${new Date(t.ts).toLocaleDateString('ru')}</i></div>`).join('')}</div>
+    </div>` : ''}
+
+    <div class="me-acts">
+      ${cloud() ? '<button id="me-pass">Сменить пароль</button>' : ''}
+      <button id="me-out" class="danger">Выйти</button>
+    </div>`;
+
+  if ($('#me-up')) $('#me-up').onclick = upgrade;
+  if ($('#me-out')) $('#me-out').onclick = () => $('#btn-logout').click();
+  if ($('#me-pass')) $('#me-pass').onclick = async () => {
+    const old = await ask('Текущий пароль');
+    if (!old) return;
+    const fresh = await ask('Новый пароль');
+    if (!fresh) return;
+    try { await api('/password', 'POST', { old, fresh }); toast('Пароль изменён'); }
+    catch (e) { toast(e.message); }
+  };
+}
 
 $$('.st-tab').forEach(t => t.onclick = () => {
   $$('.st-tab').forEach(x => x.classList.toggle('on', x === t));
@@ -1279,7 +1410,7 @@ setTimeout(dropBoot, 1400);
    долетит ли клик — если что-то перекроет карточку, печатать всё равно можно. */
 setTimeout(() => {
   const f = $('#auth-login');
-  if (f && !$('#auth').classList.contains('hidden') && document.activeElement === document.body) f.focus();
+  if (f && !$('#form').classList.contains('hidden') && document.activeElement === document.body) f.focus();
 }, 1500);
 addEventListener('load', () => setTimeout(dropBoot, 900));
 addEventListener('pageshow', () => setTimeout(dropBoot, 900));
