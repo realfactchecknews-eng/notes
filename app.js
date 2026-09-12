@@ -961,6 +961,7 @@ const TASKS = {
 };
 
 $$('[data-ai]').forEach(b => b.onclick = () => askAI(TASKS[b.dataset.ai]));
+$('#ai-cards').onclick = () => cur && harvest([cur], 'конспект');
 $('#ai-run').onclick = () => {
   const p = $('#ai-prompt').value.trim();
   p ? askAI(p) : toast('Напиши запрос');
@@ -1162,7 +1163,9 @@ function drawFolder(f) {
           ? `${f.notes.length} ${plural(f.notes.length, 'конспект', 'конспекта', 'конспектов')}`
           : 'Пока пусто'}${cardsHere.length ? ` · ${cardsHere.length} карточек` : ''}</p>
       </div>
-      ${f.notes.length ? '<button id="sub-add" class="primary">+ Конспект</button>' : ''}
+      ${f.notes.length ? `<div class="sub-btns">
+        <button id="sub-deck">🎴 Собрать карточки</button>
+        <button id="sub-add" class="primary">+ Конспект</button></div>` : ''}
     </div>
 
     ${f.notes.length ? `<div class="cards">${f.notes.map((n, i) => `
@@ -1192,6 +1195,7 @@ function drawFolder(f) {
 
   const add = () => newNote(f);
   if ($('#sub-add')) $('#sub-add').onclick = add;
+  if ($('#sub-deck')) $('#sub-deck').onclick = () => harvest(f.notes, 'предмет');
   if ($('#sub-first')) $('#sub-first').onclick = add;
   $$('.ncard').forEach(b => b.onclick = () => {
     const n = f.notes.find(x => x.id === b.dataset.id);
@@ -1371,9 +1375,17 @@ function drawCards() {
   const area = $('#card-area');
   if (!pool.length) {
     area.innerHTML = `<div class="st-empty"><div class="big">🎴</div>
-      <p>Колода пуста.</p>
-      <p class="sm">Открой конспект, выдели слово или фразу — и нажми «🎴 В колоду».
-      Определение подберёт ИИ по смыслу самого конспекта.</p></div>`;
+      <p>Колода пуста</p>
+      <p class="sm">Пусть ИИ пройдёт по конспектам и соберёт термины сам.
+      Или выдели слово прямо в конспекте.</p>
+      <button id="auto-deck" class="primary">Собрать из конспектов</button></div>`;
+    $('#auto-deck').onclick = () => {
+      const fid = $('#card-folder').value;
+      const fs = fid ? data.folders.filter(f => f.id === fid) : data.folders;
+      const notes = fs.flatMap(f => f.notes);
+      if (!notes.length) return toast('Сначала напиши конспект');
+      harvest(notes, 'конспекты');
+    };
     return;
   }
   if (!queue.length) {
@@ -1460,6 +1472,52 @@ $('#card-all').onclick = () => {
     save(); $('#card-all').click();
   });
 };
+
+/* --- автоматический сбор колоды --- */
+/* ИИ читает конспекты и сам достаёт термины с определениями.
+   Уже имеющиеся в колоде пропускаем, чтобы не плодить дубликаты. */
+let harvesting = false;
+
+const folderOf = id => data.folders.find(f => f.notes.some(n => n.id === id));
+
+async function harvest(notes, label) {
+  if (harvesting) return toast('Уже собираю, подожди');
+  const full = notes.filter(n => htmlToText(n.html).trim().length > 80);
+  if (!full.length) return toast('В конспектах слишком мало текста');
+
+  harvesting = true;
+  let added = 0, skipped = 0, i = 0;
+  toast(`Читаю ${label}…`);
+
+  for (const n of full) {
+    i++;
+    if (full.length > 1) toast(`Конспект ${i} из ${full.length}…`);
+    try {
+      const raw = await groq([
+        { role: 'system', content: 'Ты выделяешь термины для учебных карточек. Отвечай ТОЛЬКО валидным JSON без markdown.' },
+        { role: 'user', content: `Выдели из конспекта важные термины, понятия, даты или формулы — то, что имеет смысл выучить наизусть. От 3 до 12 штук, только по тексту, ничего не выдумывай. Формат строго:\n{"c":[{"t":"термин","d":"определение в 1-2 предложения"}]}\nВсё на русском.\n\nКонспект «${n.title || 'без названия'}»:\n${htmlToText(n.html).slice(0, 8000)}` },
+      ]);
+      const json = JSON.parse(raw.slice(raw.indexOf('{'), raw.lastIndexOf('}') + 1));
+      for (const c of json.c || []) {
+        const term = String(c.t || '').trim(), def = String(c.d || '').trim();
+        if (!term || !def) continue;
+        if (cards().some(x => x.term.toLowerCase() === term.toLowerCase())) { skipped++; continue; }
+        cards().push({ id: uid(), term, def, folder: (folderOf(n.id) || {}).id, note: n.id,
+          box: 0, due: Date.now(), ts: Date.now() });
+        added++;
+      }
+    } catch (e) { toast('Не вышло с «' + (n.title || 'без названия') + '»: ' + e.message); }
+  }
+
+  harvesting = false;
+  save();
+  refreshBadge();
+  toast(added
+    ? `Добавлено ${added} ${plural(added, 'карточка', 'карточки', 'карточек')}${skipped ? `, ${skipped} уже были` : ''}`
+    : 'Новых терминов не нашлось');
+  if (!$('#study').classList.contains('hidden')) drawCards();
+  return added;
+}
 
 /* --- добавление карточки выделением текста --- */
 const pop = $('#sel-pop');

@@ -667,3 +667,5 @@ input:focus,textarea:focus,select:focus{border-color:var(--acc);box-shadow:0 0 0
 .me-sound{display:flex;align-items:center;gap:9px;margin-top:20px;color:var(--dim);
   font-size:13.5px;cursor:pointer}
 .me-sound input{width:auto;accent-color:var(--acc)}
+.sub-btns{display:flex;gap:8px;flex-wrap:wrap}
+.st-empty button{margin-top:6px}
