@@ -629,12 +629,12 @@ body{font:11.5pt/1.65 Georgia,"Times New Roman",serif;color:#111827;margin:0;bac
 .wm img{width:36mm;display:block;margin:0 auto}
 .wm span{display:block;font:700 15pt Arial,sans-serif;letter-spacing:6px;color:#2563eb;margin-top:-3mm}
 .page{position:relative;z-index:1}
-.cover{text-align:center;padding:52mm 0 0}
+.cover{text-align:center;padding:34mm 0 0}
 .cover p{text-align:center}
-.cover .mark-img{display:block;margin:0 auto 5mm}
-.cover .mark{font:700 10.5pt Arial,sans-serif;letter-spacing:7px;text-transform:uppercase;
-  color:#3b82f6;margin-bottom:10mm}
-.cover h1{font-size:30pt;margin:6mm 0 3mm;letter-spacing:-1px;color:#152a5e}
+.cover .mark-img{display:block;margin:0 auto 9mm}
+.cover .mark{font:700 17pt Arial,sans-serif;letter-spacing:11px;text-transform:uppercase;
+  color:#3b82f6;margin:0 0 34mm;text-indent:11px}
+.cover h1{font-size:30pt;margin:0 0 4mm;letter-spacing:-1px;color:#152a5e}
 .cover .sub{font-size:13pt;color:#64748b;margin:0}
 .cover .rule{width:52mm;height:3px;background:linear-gradient(90deg,#2563eb,#22d3ee);
   margin:9mm auto;border-radius:3px}
@@ -648,6 +648,7 @@ body{font:11.5pt/1.65 Georgia,"Times New Roman",serif;color:#111827;margin:0;bac
 .toc ul{list-style:none;padding-left:8mm;margin:2mm 0 0;font-weight:400;font-size:11pt;color:#4b4a5e}
 .toc ul li{margin:1.6mm 0}
 .toc ul li:before{content:"— ";color:#93c5fd}
+.toc ul li.h2,.toc ul li.h3{padding-left:6mm;font-size:10.5pt;color:#64748b}
 .toc a{color:inherit;text-decoration:none}
 section{page-break-before:always}
 section:first-of-type{page-break-before:auto}
@@ -711,9 +712,12 @@ function buildDoc(notes, subject, withToc, forWord, logo) {
     });
 
     let sub = '';
-    box.querySelectorAll('h1,h2').forEach((h, j) => {
-      h.id = `h${i}_${j}`;
-      sub += `<li><a href="#h${i}_${j}">${esc(h.textContent)}</a></li>`;
+    /* Word понимает закладки только через <a name>, id ему недостаточно */
+    box.querySelectorAll('h1,h2,h3').forEach((h, j) => {
+      const anchor = `h${i}_${j}`;
+      h.id = anchor;
+      h.insertAdjacentHTML('afterbegin', `<a name="${anchor}"></a>`);
+      sub += `<li class="${h.tagName.toLowerCase()}"><a href="#${anchor}">${esc(h.textContent)}</a></li>`;
     });
 
     const name = esc(n.title || 'Без названия');
@@ -723,13 +727,13 @@ function buildDoc(notes, subject, withToc, forWord, logo) {
       ? `<p class="att"><b>Вложения:</b> ${n.files.map(f => esc(f.name)).join(', ')}</p>`
       : '';
     const d = new Date(n.ts).toLocaleDateString('ru');
-    body += `${brk}<section><h1 class="ch-t" id="c${i}">${name}</h1>
+    body += `${brk}<section><h1 class="ch-t" id="c${i}"><a name="c${i}"></a>${name}</h1>
       <p class="ch-meta">${esc(subject)} · ${d}</p>${box.innerHTML}${files}</section>`;
   });
 
   const today = new Date().toLocaleDateString('ru', { day: 'numeric', month: 'long', year: 'numeric' });
   const cover = `<div class="cover">
-      ${logo ? `<img class="mark-img" src="${logo}" width="74">` : ''}
+      ${logo ? `<img class="mark-img" src="${logo}" width="124">` : ''}
       <div class="mark">Clarity</div>
       <h1>${esc(subject)}</h1>
       <p class="sub">${notes.length === 1 ? esc(notes[0].title || 'Конспект') : `Конспекты — ${notes.length} шт.`}</p>
@@ -1009,7 +1013,7 @@ $('#ai-append').onclick = () => { $('#body').innerHTML += $('#ai-out').innerHTML
    короткий шумовой удар в начале. Файла нет, всё синтезируется на месте. */
 let actx = null;
 const sound = { on: localStorage.getItem('mute') !== '1' };
-const VOL = 0.013;                       // общая громкость, заметно тише прежней
+const VOL = 0.008;                       // общая громкость, приглушённая
 
 /* частоты стекла: отношения неровные, поэтому звук не «музыкальный» */
 const PARTS = [[1, 1], [2.41, .55], [3.86, .33], [5.12, .18], [7.03, .09]];
@@ -1060,10 +1064,33 @@ function clink(soft = false) {
 }
 
 /* один обработчик на всё приложение вместо звонка в каждой кнопке */
+let clicks = 0;
 addEventListener('pointerdown', e => {
   const b = e.target.closest('button, .note, .f-row, .flash, .stat, .ncard');
-  if (b && !b.disabled) clink(b.classList.contains('icon') || b.classList.contains('note'));
+  if (!b || b.disabled) return;
+  clink(b.classList.contains('icon') || b.classList.contains('note'));
+  if (++clicks === 6 && sound.on && !localStorage.getItem('soundTip')) soundTip();
 }, { passive: true });
+
+/* Спрашиваем один раз: кому-то звук мешает, а лезть в настройки догадается не каждый. */
+function soundTip() {
+  localStorage.setItem('soundTip', '1');
+  const el = document.createElement('div');
+  el.className = 'snd-tip';
+  el.innerHTML = `<span>Звякает при нажатиях. Оставить?</span>
+    <button class="tip-off">Выключить</button><button class="tip-ok">Оставить</button>`;
+  document.body.appendChild(el);
+  requestAnimationFrame(() => el.classList.add('in'));
+
+  const close = () => { el.classList.remove('in'); setTimeout(() => el.remove(), 300); };
+  el.querySelector('.tip-ok').onclick = close;
+  el.querySelector('.tip-off').onclick = () => {
+    sound.on = false;
+    localStorage.setItem('mute', '1');
+    close();
+  };
+  setTimeout(close, 9000);
+}
 
 /* ---------- Мелочи ---------- */
 let toastT;

@@ -669,3 +669,12 @@ input:focus,textarea:focus,select:focus{border-color:var(--acc);box-shadow:0 0 0
 .me-sound input{width:auto;accent-color:var(--acc)}
 .sub-btns{display:flex;gap:8px;flex-wrap:wrap}
 .st-empty button{margin-top:6px}
+
+/* предложение выключить звук */
+.snd-tip{position:fixed;bottom:22px;left:50%;z-index:98;display:flex;align-items:center;gap:10px;
+  background:var(--panel);border:1px solid #3b82f655;border-radius:14px;padding:11px 13px;
+  font-size:13px;box-shadow:var(--shadow),0 0 30px #1d4ed82e;
+  transform:translate(-50%,26px);opacity:0;transition:.3s var(--ease)}
+.snd-tip.in{transform:translate(-50%,0);opacity:1}
+.snd-tip button{padding:6px 11px;font-size:12.5px}
+.snd-tip .tip-ok{background:linear-gradient(135deg,#2563eb,#60a5fa);border-color:transparent;color:#fff}
