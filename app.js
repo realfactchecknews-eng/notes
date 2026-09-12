@@ -1272,6 +1272,13 @@ function dropBoot() {
   setTimeout(() => b.remove(), 600);
 }
 setTimeout(dropBoot, 1400);
+
+/* Курсор сразу в поле почты: и удобнее, и не зависит от того,
+   долетит ли клик — если что-то перекроет карточку, печатать всё равно можно. */
+setTimeout(() => {
+  const f = $('#auth-login');
+  if (f && !$('#auth').classList.contains('hidden') && document.activeElement === document.body) f.focus();
+}, 1500);
 addEventListener('load', () => setTimeout(dropBoot, 900));
 addEventListener('pageshow', () => setTimeout(dropBoot, 900));
 if (document.readyState === 'complete') setTimeout(dropBoot, 900);
