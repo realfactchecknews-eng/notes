@@ -95,6 +95,35 @@ async function api(path, method = 'GET', body) {
   return j;
 }
 
+/* --- счётчики активности --- */
+/* Считаем в памяти по разнице длины текста: на каждый ввод это одно чтение
+   textContent, без пересчёта вёрстки. На сервер уходит вместе с обычным
+   сохранением, отдельных запросов не добавляет. */
+const stats = () => {
+  const s = (data.stats ||= {});
+  for (const k of ['typed', 'deleted', 'created', 'seconds']) s[k] ||= 0;
+  return s;
+};
+let lastLen = 0, lastAct = 0;
+
+function countEdit() {
+  const now = ($('#title').value + $('#body').textContent).length;
+  const d = now - lastLen;
+  if (d > 0) stats().typed += d;
+  else if (d < 0) stats().deleted -= d;
+  lastLen = now;
+  lastAct = Date.now();
+}
+
+/* Время считаем только пока вкладка открыта и человек что-то делал последнюю минуту */
+setInterval(() => {
+  if (!data || document.hidden || Date.now() - lastAct > 60000) return;
+  stats().seconds += 5;
+  if (stats().seconds % 60 === 0) save();
+}, 5000);
+['keydown', 'pointerdown'].forEach(ev =>
+  addEventListener(ev, () => lastAct = Date.now(), { passive: true }));
+
 /* --- сохранение --- */
 /* Папки, карточки и результаты тестов уходят одним куском,
    конспекты — только те, что менялись: так синхронизация остаётся лёгкой. */
@@ -105,6 +134,7 @@ const meta = () => ({
   })),
   cards: data.cards || [],
   tests: data.tests || [],
+  stats: data.stats || {},
 });
 
 let saveT, dirty = new Set(), dropped = new Set();
@@ -161,6 +191,7 @@ async function pullCloud() {
     })),
     cards: raw.cards || [],
     tests: raw.tests || [],
+    stats: raw.stats || {},
   };
 }
 
@@ -429,6 +460,7 @@ $('#btn-folder').onclick = async () => {
 };
 
 function newNote(f) {
+  stats().created++;
   const n = { id: uid(), title: '', html: '', files: [], ts: Date.now() };
   f.notes.unshift(n);
   f.open = true;
@@ -454,6 +486,7 @@ function openNote(f, n) {
   ed.classList.remove('hidden', 'in'); void ed.offsetWidth; ed.classList.add('in');
   $('#title').value = n.title;
   $('#body').innerHTML = n.html;
+  lastLen = (n.title + $('#body').textContent).length;
   ensureTail();
   renderFiles();
   renderMeta();
@@ -485,11 +518,11 @@ function touch() {
     render();
   }, 500);
 }
-$('#title').oninput = touch;
+$('#title').oninput = () => { countEdit(); touch(); };
 $('#title').onkeydown = e => {
   if (e.key === 'Enter') { e.preventDefault(); $('#body').focus(); }
 };
-$('#body').oninput = () => { ensureTail(); touch(); renderMeta(); };
+$('#body').oninput = () => { countEdit(); ensureTail(); touch(); renderMeta(); };
 
 function renderMeta() {
   if (!cur) return;
@@ -1031,10 +1064,16 @@ $('#v-study').onclick = () => view('study');
 $('#v-me').onclick = () => view('me');
 
 /* --- личный кабинет --- */
+const num = n => n.toLocaleString('ru');
+function hours(sec) {
+  if (sec < 3600) return Math.round(sec / 60) + ' мин';
+  const h = Math.floor(sec / 3600), m = Math.round(sec % 3600 / 60);
+  return h + ' ч' + (m ? ' ' + m + ' мин' : '');
+}
 function drawProfile() {
   const notes = data.folders.flatMap(f => f.notes);
   const words = notes.reduce((s, n) => s + (htmlToText(n.html).match(/[\p{L}\p{N}]+/gu) || []).length, 0);
-  const cs = data.cards || [], ts = data.tests || [];
+  const cs = data.cards || [], ts = data.tests || [], st = data.stats || {};
   const learned = cs.filter(c => c.box >= 4).length;
   const avg = ts.length ? Math.round(ts.reduce((s, t) => s + t.right / t.total, 0) / ts.length * 100) : 0;
 
@@ -1067,11 +1106,14 @@ function drawProfile() {
 
     <div class="stats">
       <div class="stat"><b>${data.folders.length}</b><i>предметов</i></div>
-      <div class="stat"><b>${notes.length}</b><i>конспектов</i></div>
-      <div class="stat"><b>${words}</b><i>слов написано</i></div>
+      <div class="stat"><b>${notes.length}</b><i>конспектов сейчас</i></div>
+      <div class="stat"><b>${st.created || 0}</b><i>создано всего</i></div>
+      <div class="stat"><b>${num(words)}</b><i>слов</i></div>
+      <div class="stat"><b>${num(st.typed || 0)}</b><i>символов напечатано</i></div>
+      <div class="stat"><b>${num(st.deleted || 0)}</b><i>символов стёрто</i></div>
+      <div class="stat"><b>${hours(st.seconds || 0)}</b><i>в приложении</i></div>
       <div class="stat"><b>${cs.length}</b><i>карточек</i></div>
       <div class="stat"><b>${learned}</b><i>терминов выучено</i></div>
-      <div class="stat"><b>${ts.length}</b><i>тестов пройдено</i></div>
     </div>
 
     <div class="me-row">
@@ -1092,6 +1134,8 @@ function drawProfile() {
       <div class="hist">${ts.slice(0, 6).map(t => `<div><span>${esc(t.title)}</span>
         <b>${t.right}/${t.total}</b><i>${new Date(t.ts).toLocaleDateString('ru')}</i></div>`).join('')}</div>
     </div>` : ''}
+
+    <p class="me-terms"><a href="terms.html" target="_blank">Пользовательское соглашение</a></p>
 
     <div class="me-acts">
       ${cloud() ? '<button id="me-pass">Сменить пароль</button>' : ''}
