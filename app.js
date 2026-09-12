@@ -1003,34 +1003,64 @@ $('#ai-replace').onclick = () => { $('#body').innerHTML = $('#ai-out').innerHTML
 $('#ai-append').onclick = () => { $('#body').innerHTML += $('#ai-out').innerHTML; ensureTail(); touch(); toast('Добавлено'); };
 
 /* ---------- Звук ---------- */
-/* Стеклянный «дзинь» синтезируется на месте: файла нет, значит нечего грузить,
-   а тон и громкость можно подправить одной строкой. */
+/* Позвякивание тонкого стекла: негармонические призвуки, слегка расстроенные
+   парами — от этого появляются биения, как у настоящих склянок. Плюс очень
+   короткий шумовой удар в начале. Файла нет, всё синтезируется на месте. */
 let actx = null;
 const sound = { on: localStorage.getItem('mute') !== '1' };
+const VOL = 0.013;                       // общая громкость, заметно тише прежней
+
+/* частоты стекла: отношения неровные, поэтому звук не «музыкальный» */
+const PARTS = [[1, 1], [2.41, .55], [3.86, .33], [5.12, .18], [7.03, .09]];
+
+function ring(ctx, t0, base, gain) {
+  const out = ctx.createGain();
+  out.gain.value = gain;
+  out.connect(ctx.destination);
+
+  for (const [mul, vol] of PARTS) {
+    /* пара слегка расстроенных голосов даёт лёгкий дребезг */
+    for (const detune of [-1, 1]) {
+      const o = ctx.createOscillator(), g = ctx.createGain();
+      o.type = 'sine';
+      o.frequency.value = base * mul * (1 + detune * 0.0035);
+      const life = 0.34 / (1 + mul * 0.5);      // высокие призвуки гаснут быстрее
+      g.gain.setValueAtTime(0, t0);
+      g.gain.linearRampToValueAtTime(vol * 0.5, t0 + 0.002);
+      g.gain.exponentialRampToValueAtTime(0.0001, t0 + life);
+      o.connect(g).connect(out);
+      o.start(t0); o.stop(t0 + life + 0.02);
+    }
+  }
+
+  /* щелчок соприкосновения: очень короткий фильтрованный шум */
+  const n = ctx.createBufferSource();
+  const buf = ctx.createBuffer(1, ctx.sampleRate * 0.02, ctx.sampleRate);
+  const d = buf.getChannelData(0);
+  for (let i = 0; i < d.length; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / d.length) ** 4;
+  n.buffer = buf;
+  const hp = ctx.createBiquadFilter();
+  hp.type = 'highpass'; hp.frequency.value = 4000;
+  const ng = ctx.createGain();
+  ng.gain.value = 0.25;
+  n.connect(hp).connect(ng).connect(out);
+  n.start(t0);
+}
 
 function clink(soft = false) {
   if (!sound.on) return;
   try {
     actx ||= new (window.AudioContext || window.webkitAudioContext)();
     if (actx.state === 'suspended') actx.resume();
-    const t = actx.currentTime;
-    /* три обертона стекла: основной, квинта и высокий призвук */
-    [[1, 0.5], [2.76, 0.22], [5.4, 0.1]].forEach(([mul, vol]) => {
-      const o = actx.createOscillator(), g = actx.createGain();
-      o.type = 'sine';
-      o.frequency.value = (soft ? 880 : 1320) * mul;
-      g.gain.setValueAtTime(0, t);
-      g.gain.linearRampToValueAtTime(vol * (soft ? 0.05 : 0.07), t + 0.004);
-      g.gain.exponentialRampToValueAtTime(0.0001, t + (soft ? 0.5 : 0.9));
-      o.connect(g).connect(actx.destination);
-      o.start(t); o.stop(t + 1);
-    });
+    /* лёгкий разброс высоты — склянки никогда не звякают одинаково */
+    const base = (soft ? 1750 : 2300) * (0.97 + Math.random() * 0.06);
+    ring(actx, actx.currentTime, base, VOL * (soft ? 0.65 : 1));
   } catch {}
 }
 
 /* один обработчик на всё приложение вместо звонка в каждой кнопке */
 addEventListener('pointerdown', e => {
-  const b = e.target.closest('button, .note, .f-row, .flash, .stat, .subjects button');
+  const b = e.target.closest('button, .note, .f-row, .flash, .stat, .ncard');
   if (b && !b.disabled) clink(b.classList.contains('icon') || b.classList.contains('note'));
 }, { passive: true });
 
