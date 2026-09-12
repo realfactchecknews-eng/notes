@@ -237,6 +237,7 @@ async function enter(who, tok) {
   $('#burger').classList.remove('hidden');
   render();
   refreshBadge();
+  showStart();
 }
 
 /* --- кнопки --- */
@@ -480,6 +481,7 @@ function delNote(f, n) {
 /* ---------- Редактор ---------- */
 function openNote(f, n) {
   curFolder = f; cur = n;
+  $('#welcome').classList.add('hidden');
   if (!$('#study').classList.contains('hidden') || !$('#profile').classList.contains('hidden')) view('notes');
   $('#empty').classList.add('hidden');
   const ed = $('#editor');
@@ -496,8 +498,8 @@ function openNote(f, n) {
 function closeNote() {
   cur = curFolder = null;
   $('#editor').classList.add('hidden');
-  $('#empty').classList.remove('hidden');
   $('#ai-panel').classList.add('hidden');
+  showStart();
 }
 
 let timer;
@@ -1053,7 +1055,9 @@ function view(mode) {
   $('#study').classList.toggle('hidden', mode !== 'study');
   $('#profile').classList.toggle('hidden', mode !== 'me');
   $('#editor').classList.toggle('hidden', !notes || !cur);
-  $('#empty').classList.toggle('hidden', !notes || !!cur);
+  $('#empty').classList.add('hidden');
+  $('#welcome').classList.add('hidden');
+  if (notes && !cur) showStart();
   $('.tree').classList.toggle('dim', !notes);
   if (mode === 'study') { fillPickers(); drawCards(); }
   if (mode === 'me') drawProfile();
@@ -1062,6 +1066,35 @@ function view(mode) {
 $('#v-notes').onclick = () => view('notes');
 $('#v-study').onclick = () => view('study');
 $('#v-me').onclick = () => view('me');
+
+/* --- первый запуск: выбор предметов --- */
+const picked = new Set();
+
+$$('.subjects button').forEach(b => {
+  b.textContent = b.dataset.s;
+  b.onclick = () => {
+    picked.has(b.dataset.s) ? picked.delete(b.dataset.s) : picked.add(b.dataset.s);
+    b.classList.toggle('on', picked.has(b.dataset.s));
+    $('#wel-go').disabled = !picked.size;
+    $('#wel-go').textContent = picked.size ? `Создать (${picked.size})` : 'Создать';
+  };
+});
+
+$('#wel-go').onclick = () => {
+  for (const s of picked) data.folders.push({ id: uid(), name: s, open: true, notes: [] });
+  picked.clear();
+  save(); render(); showStart();
+  toast('Готово — предметы слева');
+};
+$('#wel-skip').onclick = () => { $('#welcome').classList.add('hidden'); $('#empty').classList.remove('hidden'); };
+
+/* Пока библиотека пуста, вместо пустого экрана показываем приветствие */
+function showStart() {
+  const first = !data.folders.length;
+  const busyView = !$('#study').classList.contains('hidden') || !$('#profile').classList.contains('hidden');
+  $('#welcome').classList.toggle('hidden', !first || !!cur || busyView);
+  $('#empty').classList.toggle('hidden', first || !!cur || busyView);
+}
 
 /* --- личный кабинет --- */
 const num = n => n.toLocaleString('ru');

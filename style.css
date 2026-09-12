@@ -551,3 +551,64 @@ input:focus,textarea:focus,select:focus{border-color:var(--acc);box-shadow:0 0 0
 .me-terms{margin:22px 0 0;font-size:12.5px}
 .me-terms a{color:var(--dim);text-decoration:none}
 .me-terms a:hover{color:var(--acc2)}
+
+/* ---------- ПЕРВЫЙ ЗАПУСК ---------- */
+.welcome{max-width:700px;margin:0 auto;padding:34px 30px 90px;text-align:center;
+  animation:enter .45s var(--ease)}
+.welcome h2{font-size:26px;letter-spacing:-.8px;margin:0 0 6px}
+.wel-sub{color:var(--dim);font-size:14px;margin:0 0 24px}
+
+/* живой пример: печатается конспект, из него рождаются карточка и вопрос */
+.demo{position:relative;height:210px;margin-bottom:30px}
+.demo-page{position:absolute;left:50%;top:0;transform:translateX(-50%);
+  width:290px;text-align:left;background:var(--panel);border:1px solid var(--line);
+  border-radius:16px;padding:18px 20px;box-shadow:0 18px 46px #0007}
+.demo-title{font-size:17px;font-weight:600;color:var(--acc2);margin-bottom:12px;
+  white-space:nowrap;overflow:hidden;width:0;
+  animation:typing 2s steps(10) .4s forwards}
+@keyframes typing{to{width:112px}}
+.caret{display:inline-block;width:2px;height:15px;background:var(--acc);
+  vertical-align:-2px;margin-left:2px;animation:blink .7s steps(1) infinite,fadeOut .3s 2.6s forwards}
+@keyframes blink{50%{opacity:0}}
+@keyframes fadeOut{to{opacity:0}}
+.demo-line{height:7px;border-radius:4px;background:#ffffff14;margin-bottom:9px;
+  opacity:0;transform:translateY(6px);animation:lineIn .5s var(--ease) forwards}
+.l1{width:100%;animation-delay:2.5s}
+.l2{width:82%;animation-delay:2.9s}
+.l3{width:64%;animation-delay:4.4s}
+@keyframes lineIn{to{opacity:1;transform:none}}
+.demo-word{display:inline-block;font-size:12.5px;color:var(--acc2);background:#3b82f62e;
+  border-radius:6px;padding:2px 7px;margin-bottom:9px;opacity:0;
+  animation:wordIn .4s var(--ease) 3.4s forwards,wordOut .6s var(--ease) 4.6s forwards}
+@keyframes wordIn{to{opacity:1}}
+@keyframes wordOut{to{opacity:.25;transform:scale(.9)}}
+
+.demo-card,.demo-quiz{position:absolute;background:var(--panel);border:1px solid #3b82f655;
+  border-radius:14px;padding:11px 14px;text-align:left;opacity:0;
+  box-shadow:0 14px 34px #0008,0 0 26px #2563eb2e;font-size:12.5px}
+.demo-card{left:2%;top:96px;width:176px;
+  animation:pop .6s var(--ease) 4.8s forwards,float2 3s ease-in-out 5.4s infinite}
+.demo-quiz{right:2%;top:130px;width:186px;
+  animation:pop .6s var(--ease) 5.6s forwards,float2 3.4s ease-in-out 6.2s infinite}
+@keyframes pop{from{opacity:0;transform:translateY(14px) scale(.9)}to{opacity:1;transform:none}}
+@keyframes float2{50%{transform:translateY(-6px)}}
+.dc-term,.dq-q{display:block;font-weight:600;margin-bottom:3px}
+.dc-def,.dq-a{display:block;color:var(--dim);font-size:11.5px;line-height:1.45}
+.dq-a{color:#6ee7b7}
+
+/* предметы */
+.subjects{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin-bottom:26px}
+.subjects button{font-size:13.5px;padding:9px 14px;border-radius:20px;
+  background:#ffffff08;border-color:transparent}
+.subjects button:hover{background:#3b82f61f;border-color:#3b82f655}
+.subjects button.on{background:#3b82f62e;border-color:var(--acc);color:var(--acc2);
+  font-weight:600;box-shadow:0 0 18px #2563eb3d}
+.wel-acts{display:flex;gap:8px;justify-content:center}
+.wel-acts button{min-width:140px;padding:11px}
+.wel-acts button:disabled{opacity:.45;cursor:default}
+@media(max-width:620px){
+  .welcome{padding:20px 16px 80px}
+  .demo{height:240px}
+  .demo-card{left:0;width:150px}
+  .demo-quiz{right:0;width:158px}
+}

@@ -9,7 +9,7 @@
 <link rel="apple-touch-icon" href="favicon.svg">
 <meta name="theme-color" content="#080c16">
 <meta name="description" content="Clarity — конспекты по предметам: папки, рисование от руки, файлы, карточки, тесты и ИИ-ассистент.">
-<link rel="stylesheet" href="style.css?v=24">
+<link rel="stylesheet" href="style.css?v=25">
 </head>
 <body>
 
@@ -144,6 +144,50 @@
     <div id="empty" class="empty">
       <div class="empty-art">✎</div>
       <p>Выбери конспект слева или создай новый</p>
+    </div>
+
+    <!-- ПЕРВЫЙ ЗАПУСК -->
+    <div id="welcome" class="welcome hidden">
+      <div class="demo">
+        <div class="demo-page">
+          <div class="demo-title">Фотосинтез<span class="caret"></span></div>
+          <div class="demo-line l1"></div>
+          <div class="demo-line l2"></div>
+          <div class="demo-word">хлоропласт</div>
+          <div class="demo-line l3"></div>
+        </div>
+        <div class="demo-card">
+          <span class="dc-term">хлоропласт</span>
+          <span class="dc-def">органоид, где идёт фотосинтез</span>
+        </div>
+        <div class="demo-quiz">
+          <span class="dq-q">Где идёт фотосинтез?</span>
+          <span class="dq-a">в хлоропластах ✓</span>
+        </div>
+      </div>
+
+      <h2>С чего начнём?</h2>
+      <p class="wel-sub">Выбери предметы — для каждого появится своя папка</p>
+
+      <div class="subjects">
+        <button data-s="📐 Математика"></button>
+        <button data-s="⚛️ Физика"></button>
+        <button data-s="🧪 Химия"></button>
+        <button data-s="🧬 Биология"></button>
+        <button data-s="🏛 История"></button>
+        <button data-s="⚖️ Обществознание"></button>
+        <button data-s="✍️ Русский язык"></button>
+        <button data-s="🇬🇧 Английский"></button>
+        <button data-s="💻 Информатика"></button>
+        <button data-s="📖 Литература"></button>
+        <button data-s="🌍 География"></button>
+        <button data-s="🎨 МХК"></button>
+      </div>
+
+      <div class="wel-acts">
+        <button id="wel-skip">Пропустить</button>
+        <button id="wel-go" class="primary" disabled>Создать</button>
+      </div>
     </div>
 
     <div id="editor" class="editor hidden">
@@ -316,6 +360,6 @@
 <input type="file" id="file-input" multiple hidden>
 <div id="toast" class="toast"></div>
 
-<script src="app.js?v=24"></script>
+<script src="app.js?v=25"></script>
 </body>
 </html>
