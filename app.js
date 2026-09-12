@@ -272,8 +272,10 @@ $$('.tab').forEach(t => t.onclick = () => {
   $('#auth-login').focus();
 });
 const submitAuth = () => ($('.tabs').classList.contains('reg') ? $('#btn-register') : $('#btn-login')).click();
-$('#auth-login').onkeydown = e => e.key === 'Enter' && $('#auth-pass').focus();
-$('#auth-pass').onkeydown = e => e.key === 'Enter' && submitAuth();
+/* Фигурные скобки обязательны: короткая стрелка вернула бы false на любой
+   клавише кроме Enter, а для onkeydown false означает «отменить ввод». */
+$('#auth-login').onkeydown = e => { if (e.key === 'Enter') $('#auth-pass').focus(); };
+$('#auth-pass').onkeydown = e => { if (e.key === 'Enter') submitAuth(); };
 
 /* уходим со страницы — дописываем несохранённое */
 addEventListener('beforeunload', () => { if (cloud() && dirty.size) pushCloud(); });
