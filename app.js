@@ -422,6 +422,7 @@ function render() {
         return;
       }
       f.open = !f.open; save(); render();
+      openFolder(f);
     };
 
     const box = el.querySelector('.notes');
@@ -461,6 +462,7 @@ $('#btn-folder').onclick = async () => {
 };
 
 function newNote(f) {
+  $('#subject').classList.add('hidden');
   stats().created++;
   const n = { id: uid(), title: '', html: '', files: [], ts: Date.now() };
   f.notes.unshift(n);
@@ -482,6 +484,7 @@ function delNote(f, n) {
 function openNote(f, n) {
   curFolder = f; cur = n;
   $('#welcome').classList.add('hidden');
+  $('#subject').classList.add('hidden');
   if (!$('#study').classList.contains('hidden') || !$('#profile').classList.contains('hidden')) view('notes');
   $('#empty').classList.add('hidden');
   const ed = $('#editor');
@@ -999,6 +1002,38 @@ async function askAI(task) {
 $('#ai-replace').onclick = () => { $('#body').innerHTML = $('#ai-out').innerHTML; ensureTail(); touch(); toast('Заменено'); };
 $('#ai-append').onclick = () => { $('#body').innerHTML += $('#ai-out').innerHTML; ensureTail(); touch(); toast('Добавлено'); };
 
+/* ---------- Звук ---------- */
+/* Стеклянный «дзинь» синтезируется на месте: файла нет, значит нечего грузить,
+   а тон и громкость можно подправить одной строкой. */
+let actx = null;
+const sound = { on: localStorage.getItem('mute') !== '1' };
+
+function clink(soft = false) {
+  if (!sound.on) return;
+  try {
+    actx ||= new (window.AudioContext || window.webkitAudioContext)();
+    if (actx.state === 'suspended') actx.resume();
+    const t = actx.currentTime;
+    /* три обертона стекла: основной, квинта и высокий призвук */
+    [[1, 0.5], [2.76, 0.22], [5.4, 0.1]].forEach(([mul, vol]) => {
+      const o = actx.createOscillator(), g = actx.createGain();
+      o.type = 'sine';
+      o.frequency.value = (soft ? 880 : 1320) * mul;
+      g.gain.setValueAtTime(0, t);
+      g.gain.linearRampToValueAtTime(vol * (soft ? 0.05 : 0.07), t + 0.004);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + (soft ? 0.5 : 0.9));
+      o.connect(g).connect(actx.destination);
+      o.start(t); o.stop(t + 1);
+    });
+  } catch {}
+}
+
+/* один обработчик на всё приложение вместо звонка в каждой кнопке */
+addEventListener('pointerdown', e => {
+  const b = e.target.closest('button, .note, .f-row, .flash, .stat, .subjects button');
+  if (b && !b.disabled) clink(b.classList.contains('icon') || b.classList.contains('note'));
+}, { passive: true });
+
 /* ---------- Мелочи ---------- */
 let toastT;
 function toast(t) {
@@ -1054,6 +1089,7 @@ function view(mode) {
   $('#v-me').classList.toggle('on', mode === 'me');
   $('#study').classList.toggle('hidden', mode !== 'study');
   $('#profile').classList.toggle('hidden', mode !== 'me');
+  if (mode !== 'notes') $('#subject').classList.add('hidden');
   $('#editor').classList.toggle('hidden', !notes || !cur);
   $('#empty').classList.add('hidden');
   $('#welcome').classList.add('hidden');
@@ -1066,6 +1102,77 @@ function view(mode) {
 $('#v-notes').onclick = () => view('notes');
 $('#v-study').onclick = () => view('study');
 $('#v-me').onclick = () => view('me');
+
+/* --- экран предмета --- */
+function openFolder(f) {
+  curFolder = f; cur = null;
+  $$('#study,#profile,#welcome,#empty,#editor').forEach(el => el.classList.add('hidden'));
+  $('#subject').classList.remove('hidden');
+  $$('.views button').forEach(b => b.classList.toggle('on', b.id === 'v-notes'));
+  $('.tree').classList.remove('dim');
+  drawFolder(f);
+  closeSidebar();
+}
+
+function drawFolder(f) {
+  const cardsHere = (data.cards || []).filter(c => c.folder === f.id);
+  const names = new Set([f.name, ...f.notes.map(n => n.title)]);
+  const done = (data.tests || []).filter(t => names.has(t.title));
+
+  const preview = n => {
+    const t = htmlToText(n.html).replace(/\s+/g, ' ').trim();
+    return t ? esc(t.slice(0, 90)) + (t.length > 90 ? '…' : '') : 'Пусто';
+  };
+
+  $('#subject').innerHTML = `
+    <div class="sub-head">
+      <div>
+        <h2>${esc(f.name)}</h2>
+        <p class="sub-meta">${f.notes.length
+          ? `${f.notes.length} ${plural(f.notes.length, 'конспект', 'конспекта', 'конспектов')}`
+          : 'Пока пусто'}${cardsHere.length ? ` · ${cardsHere.length} карточек` : ''}</p>
+      </div>
+      ${f.notes.length ? '<button id="sub-add" class="primary">+ Конспект</button>' : ''}
+    </div>
+
+    ${f.notes.length ? `<div class="cards">${f.notes.map((n, i) => `
+      <button class="ncard" data-id="${n.id}" style="animation-delay:${i * 45}ms">
+        <span class="nc-t">${esc(n.title || 'Без названия')}</span>
+        <span class="nc-p">${preview(n)}</span>
+        <span class="nc-d">${new Date(n.ts).toLocaleDateString('ru')}</span>
+      </button>`).join('')}</div>`
+    : `<div class="big-add">
+        <button id="sub-first" class="pulse">
+          <span class="pl-ring"></span><span class="pl-ring r2"></span>
+          <b>+</b>
+        </button>
+        <p>Создать первый конспект по предмету</p>
+      </div>`}
+
+    ${done.length ? `<div class="passed">
+      <div class="me-t">Пройденные темы</div>
+      ${done.slice(0, 8).map(t => {
+        const p = Math.round(t.right / t.total * 100);
+        return `<div class="pass-row">
+          <span>${esc(t.title)}</span>
+          <span class="pass-bar"><i style="width:${p}%"></i></span>
+          <b>${p}%</b><i>${new Date(t.ts).toLocaleDateString('ru')}</i></div>`;
+      }).join('')}
+    </div>` : ''}`;
+
+  const add = () => newNote(f);
+  if ($('#sub-add')) $('#sub-add').onclick = add;
+  if ($('#sub-first')) $('#sub-first').onclick = add;
+  $$('.ncard').forEach(b => b.onclick = () => {
+    const n = f.notes.find(x => x.id === b.dataset.id);
+    if (n) openNote(f, n);
+  });
+}
+
+const plural = (n, a, b, c) => {
+  const d = n % 100, e = n % 10;
+  return d > 10 && d < 20 ? c : e === 1 ? a : e > 1 && e < 5 ? b : c;
+};
 
 /* --- первый запуск: выбор предметов --- */
 const picked = new Set();
@@ -1091,7 +1198,9 @@ $('#wel-skip').onclick = () => { $('#welcome').classList.add('hidden'); $('#empt
 /* Пока библиотека пуста, вместо пустого экрана показываем приветствие */
 function showStart() {
   const first = !data.folders.length;
-  const busyView = !$('#study').classList.contains('hidden') || !$('#profile').classList.contains('hidden');
+  const busyView = !$('#study').classList.contains('hidden')
+    || !$('#profile').classList.contains('hidden')
+    || !$('#subject').classList.contains('hidden');
   $('#welcome').classList.toggle('hidden', !first || !!cur || busyView);
   $('#empty').classList.toggle('hidden', first || !!cur || busyView);
 }
@@ -1168,6 +1277,9 @@ function drawProfile() {
         <b>${t.right}/${t.total}</b><i>${new Date(t.ts).toLocaleDateString('ru')}</i></div>`).join('')}</div>
     </div>` : ''}
 
+    <label class="me-sound"><input type="checkbox" id="snd" ${sound.on ? 'checked' : ''}>
+      Звук нажатий</label>
+
     <p class="me-terms"><a href="terms.html" target="_blank">Пользовательское соглашение</a></p>
 
     <div class="me-acts">
@@ -1175,6 +1287,11 @@ function drawProfile() {
       <button id="me-out" class="danger">Выйти</button>
     </div>`;
 
+  $('#snd').onchange = e => {
+    sound.on = e.target.checked;
+    localStorage.setItem('mute', sound.on ? '0' : '1');
+    if (sound.on) clink();
+  };
   if ($('#me-up')) $('#me-up').onclick = upgrade;
   if ($('#me-out')) $('#me-out').onclick = () => $('#btn-logout').click();
   if ($('#me-pass')) $('#me-pass').onclick = async () => {
