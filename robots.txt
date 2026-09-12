@@ -1,0 +1,6 @@
+User-agent: *
+Allow: /
+Disallow: /api/
+
+Sitemap: https://clarityapp.ru/sitemap.xml
+Host: https://clarityapp.ru

@@ -678,3 +678,6 @@ input:focus,textarea:focus,select:focus{border-color:var(--acc);box-shadow:0 0 0
 .snd-tip.in{transform:translate(-50%,0);opacity:1}
 .snd-tip button{padding:6px 11px;font-size:12.5px}
 .snd-tip .tip-ok{background:linear-gradient(135deg,#2563eb,#60a5fa);border-color:transparent;color:#fff}
+.about-link{position:absolute;bottom:18px;left:50%;transform:translateX(-50%);z-index:3;
+  color:#5d6b87;font-size:12.5px;text-decoration:none}
+.about-link:hover{color:var(--acc2)}

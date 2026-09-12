@@ -930,20 +930,19 @@ function stroke(e) {
    Код публичный, значит ключ виден всем — при злоупотреблении просто меняем. */
 const KEY = ['gsk_jeMCQ93i6A8sMiH0eXcS', 'WGdyb3FY9mzl5nSma9J7lW2w', 'HALUcpYX'].join('');
 const MODEL = 'openai/gpt-oss-120b';
-const cfg = () => {
-  const c = JSON.parse(localStorage.getItem('ai') || '{}');
-  return { key: c.key || KEY, model: c.model || MODEL };
-};
+const cfg = () => ({
+  key: KEY,
+  model: JSON.parse(localStorage.getItem('ai') || '{}').model || MODEL,
+});
 
 $('#btn-settings').onclick = () => {
   const c = cfg();
-  $('#api-key').value = c.key === KEY ? '' : c.key;
   $('#api-model').value = c.model;
   show($('#set-modal'));
 };
 $('#set-cancel').onclick = () => hide($('#set-modal'));
 $('#set-save').onclick = () => {
-  localStorage.setItem('ai', JSON.stringify({ key: $('#api-key').value.trim(), model: $('#api-model').value }));
+  localStorage.setItem('ai', JSON.stringify({ model: $('#api-model').value }));
   hide($('#set-modal'));
   toast('Сохранено');
 };

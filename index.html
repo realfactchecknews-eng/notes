@@ -8,8 +8,16 @@
 <link rel="icon" href="favicon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="favicon.svg">
 <meta name="theme-color" content="#080c16">
-<meta name="description" content="Clarity — конспекты по предметам: папки, рисование от руки, файлы, карточки, тесты и ИИ-ассистент.">
-<link rel="stylesheet" href="style.css?v=29">
+<meta name="description" content="Clarity — бесплатное приложение для учебных конспектов: папки по предметам, рисование от руки, карточки с интервальным повторением, тесты по конспектам и экспорт в PDF и Word.">
+<link rel="canonical" href="https://clarityapp.ru/">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Clarity">
+<meta property="og:title" content="Clarity — конспекты, карточки и тесты">
+<meta property="og:description" content="Конспекты по предметам, карточки с интервальным повторением, тесты и экспорт в PDF и Word.">
+<meta property="og:url" content="https://clarityapp.ru/">
+<meta property="og:image" content="https://clarityapp.ru/logo.svg">
+<meta property="og:locale" content="ru_RU">
+<link rel="stylesheet" href="style.css?v=30">
 </head>
 <body>
 
@@ -119,6 +127,7 @@
     <p class="tiny">Продолжая, вы принимаете
       <a href="terms.html" target="_blank">пользовательское соглашение</a></p>
   </div>
+  <a class="about-link" href="about.html">О приложении</a>
 </div>
 
 <!-- ПРИЛОЖЕНИЕ -->
@@ -137,7 +146,7 @@
     <input id="search" class="search" placeholder="Поиск…">
     <div id="tree" class="tree"></div>
     <button id="btn-folder" class="add-folder">+ Предмет</button>
-    <button id="btn-settings" class="add-folder ghost">⚙ Настройки ИИ</button>
+    <button id="btn-settings" class="add-folder ghost">⚙ Модель ИИ</button>
   </aside>
 
   <main class="main">
@@ -306,9 +315,7 @@
 <!-- НАСТРОЙКИ -->
 <div id="set-modal" class="modal hidden">
   <div class="modal-box">
-    <h3>Настройки ИИ</h3>
-    <p class="hint">Свой ключ Groq — если нужен. Хранится в браузере.</p>
-    <input id="api-key" placeholder="свой ключ gsk_… (необязательно)">
+    <h3>Модель ИИ</h3>
     <select id="api-model">
       <option value="openai/gpt-oss-120b">gpt-oss-120b (умная)</option>
       <option value="qwen/qwen3.8-27b">qwen3.8-27b</option>
@@ -364,6 +371,6 @@
 <input type="file" id="file-input" multiple hidden>
 <div id="toast" class="toast"></div>
 
-<script src="app.js?v=29"></script>
+<script src="app.js?v=30"></script>
 </body>
 </html>
