@@ -1527,6 +1527,7 @@ async function harvest(notes, label) {
       for (const c of json.c || []) {
         const term = String(c.t || '').trim(), def = String(c.d || '').trim();
         if (!term || !def) continue;
+        if (!norm(htmlToText(n.html)).includes(norm(term).slice(0, Math.max(4, norm(term).length - 2)))) continue;
         if (cards().some(x => x.term.toLowerCase() === term.toLowerCase())) { skipped++; continue; }
         cards().push({ id: uid(), term, def, folder: (folderOf(n.id) || {}).id, note: n.id,
           box: 0, due: Date.now(), ts: Date.now() });
@@ -1612,19 +1613,66 @@ $('#test-gen').onclick = async () => {
   $('#test-area').innerHTML = '<div class="st-empty"><span class="dots">Составляю тест</span></div>';
   try {
     const raw = await groq([
-      { role: 'system', content: 'Ты составляешь проверочные тесты по учебным конспектам. Отвечай ТОЛЬКО валидным JSON без markdown.' },
-      { role: 'user', content: `Составь ${count} вопросов с 4 вариантами ответа по этому конспекту. Проверяй понимание, а не дословную память. Формат строго:\n{"q":[{"t":"вопрос","a":["вариант1","вариант2","вариант3","вариант4"],"c":0,"why":"почему верен правильный ответ"}]}\nПоле c — индекс правильного варианта (0-3). Всё на русском.\n\nКонспект:\n${text}` },
-    ]);
+      { role: 'system', content: 'Ты составляешь проверочные тесты строго по учебному конспекту. Ты не используешь знания вне текста. Отвечай ТОЛЬКО валидным JSON без markdown.' },
+      { role: 'user', content: `Составь ${count + 5} вопросов с 4 вариантами ответа по конспекту ниже.
+
+Правила:
+- каждый вопрос проверяет факт, который ПРЯМО написан в конспекте;
+- в поле "src" — дословная цитата из конспекта (5–25 слов), из которой следует правильный ответ;
+- вопрос должен быть однозначным и логически корректным, без противоречий в формулировке;
+- не используй отрицания «НЕ», «кроме», вопросы-ловушки и «все перечисленное»;
+- неверные варианты правдоподобны, но явно опровергаются текстом;
+- если в тексте мало фактов — составь меньше вопросов, но не выдумывай.
+
+Формат строго:
+{"q":[{"t":"вопрос","a":["вариант1","вариант2","вариант3","вариант4"],"c":0,"src":"цитата из конспекта","why":"короткое пояснение"}]}
+Поле c — индекс правильного варианта (0-3). Всё на русском.
+
+Конспект:
+${text}` },
+    ], 'medium');
     const json = JSON.parse(raw.slice(raw.indexOf('{'), raw.lastIndexOf('}') + 1));
-    const qs = (json.q || []).filter(q => q.t && q.a?.length === 4 && q.c >= 0 && q.c < 4);
-    if (!qs.length) throw new Error('пустой тест');
+
+    /* Отсеиваем вопросы, чью цитату нельзя найти в конспекте: так модель
+       не может подсунуть выдуманный факт под видом проверки по тексту. */
+    const qs = (json.q || [])
+      .filter(q => q.t && q.a?.length === 4 && q.c >= 0 && q.c < 4 && q.src)
+      .filter(q => inText(q.src, text))
+      .filter(q => !/(^|[^\p{L}])(не|кроме)([^\p{L}]|$)|все перечисленн/iu.test(q.t))
+      .slice(0, count)
+      .map(shuffleQ);
+
+    if (!qs.length) throw new Error('модель не нашла в тексте достаточно фактов — допиши конспект');
     test = { qs, i: 0, right: 0, title };
+    if (qs.length < count) toast(`Проверку по тексту прошли ${qs.length} из ${count} вопросов`);
     drawQuestion();
   } catch (e) {
     $('#test-area').innerHTML = `<div class="st-empty"><div class="big">😕</div>
       <p>Не получилось составить тест.</p><p class="sm">${esc(e.message)}</p></div>`;
   }
 };
+
+/* нормализация для сравнения: регистр, ё, пунктуация, пробелы */
+const norm = s => String(s).toLowerCase().replace(/ё/g, 'е')
+  .replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
+
+/* цитата считается найденной, если идёт в тексте подряд
+   или почти все её значимые слова в тексте есть */
+function inText(quote, text) {
+  const q = norm(quote), t = norm(text);
+  if (q.length < 8) return false;
+  if (t.includes(q)) return true;
+  const words = q.split(' ').filter(w => w.length > 3);
+  if (words.length < 3) return false;
+  const hit = words.filter(w => t.includes(w.slice(0, Math.max(4, w.length - 2)))).length;
+  return hit / words.length >= 0.85;
+}
+
+/* правильный ответ модель любит ставить первым — перемешиваем */
+function shuffleQ(q) {
+  const order = [0, 1, 2, 3].sort(() => Math.random() - 0.5);
+  return { ...q, a: order.map(i => q.a[i]), c: order.indexOf(q.c) };
+}
 
 function drawQuestion() {
   const q = test.qs[test.i];
@@ -1649,7 +1697,8 @@ function drawQuestion() {
       if (j === i && !ok) x.classList.add('wrong');
     });
     const why = $('#q-why');
-    why.innerHTML = `<b>${ok ? '✓ Верно' : '✕ Неверно'}</b> ${esc(q.why || '')}`;
+    why.innerHTML = `<b>${ok ? '✓ Верно' : '✕ Неверно'}</b> ${esc(q.why || '')}
+      ${q.src ? `<span class="q-src">«${esc(q.src)}»</span>` : ''}`;
     why.className = 'q-why shown ' + (ok ? 'good' : 'bad');
     $('#q-next').classList.remove('hidden');
     $('#q-next').textContent = test.i === test.qs.length - 1 ? 'Показать результат' : 'Дальше →';
@@ -1682,14 +1731,14 @@ function drawResult() {
 }
 
 /* общий вызов модели */
-async function groq(messages) {
+async function groq(messages, effort = 'low') {
   const c = cfg();
   const r = await fetch('https://api.groq.com/openai/v1/chat/completions', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + c.key },
     body: JSON.stringify({
       model: c.model, temperature: 0.3,
-      max_completion_tokens: 4000, reasoning_effort: 'low', messages,
+      max_completion_tokens: 8000, reasoning_effort: effort, messages,
     }),
   });
   const j = await r.json();

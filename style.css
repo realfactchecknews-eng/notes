@@ -681,3 +681,5 @@ input:focus,textarea:focus,select:focus{border-color:var(--acc);box-shadow:0 0 0
 .about-link{position:absolute;bottom:18px;left:50%;transform:translateX(-50%);z-index:3;
   color:#5d6b87;font-size:12.5px;text-decoration:none}
 .about-link:hover{color:var(--acc2)}
+.q-src{display:block;margin-top:8px;padding-left:10px;border-left:2px solid #3b82f666;
+  color:var(--dim);font-size:12.5px;font-style:italic}
