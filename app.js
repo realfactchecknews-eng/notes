@@ -135,6 +135,7 @@ const meta = () => ({
   cards: data.cards || [],
   tests: data.tests || [],
   stats: data.stats || {},
+  exam: data.exam || {},
 });
 
 let saveT, dirty = new Set(), dropped = new Set();
@@ -192,6 +193,7 @@ async function pullCloud() {
     cards: raw.cards || [],
     tests: raw.tests || [],
     stats: raw.stats || {},
+    exam: raw.exam || {},
   };
 }
 
@@ -1122,6 +1124,158 @@ addEventListener('keydown', e => {
 });
 
 
+
+/* ================= ПОДГОТОВКА К ЗАЧЁТУ ================= */
+/* Письменный ответ на билет: пишешь своими словами, ИИ сверяет с конспектом.
+   Прогресс хранится по предмету, чтобы видеть, какие билеты уже отвечены. */
+const exams = () => (data.exam ||= {});
+const examOf = fid => (exams()[fid] ||= { tickets: [], done: {} });
+
+let ex = null;   // текущий заход: { fid, q, idx }
+
+$('#ex-folder').onchange = drawExam;
+
+$('#ex-tickets').onclick = () => {
+  const fid = $('#ex-folder').value;
+  if (!fid) return toast('Сначала создай предмет');
+  $('#tick-text').value = examOf(fid).tickets.join('\n');
+  show($('#tick-modal'));
+};
+$('#tick-cancel').onclick = () => hide($('#tick-modal'));
+$('#tick-save').onclick = () => {
+  const fid = $('#ex-folder').value;
+  examOf(fid).tickets = $('#tick-text').value.split('\n').map(s => s.trim()).filter(Boolean);
+  save(); hide($('#tick-modal')); drawExam();
+  toast(`Сохранено билетов: ${examOf(fid).tickets.length}`);
+};
+
+function drawExam() {
+  const sel = $('#ex-folder');
+  if (!sel.options.length || sel.dataset.n !== String(data.folders.length)) {
+    sel.innerHTML = data.folders.map(f => `<option value="${f.id}">${esc(f.name)}</option>`).join('');
+    sel.dataset.n = String(data.folders.length);
+  }
+  const fid = sel.value || data.folders[0]?.id;
+  if (!fid) {
+    $('#ex-area').innerHTML = '<div class="st-empty"><div class="big">🎓</div><p>Сначала создай предмет</p></div>';
+    return;
+  }
+  sel.value = fid;
+  const e = examOf(fid), done = Object.values(e.done);
+  const avg = done.length ? (done.reduce((s, d) => s + d.score, 0) / done.length).toFixed(1) : null;
+
+  $('#ex-area').innerHTML = `
+    <div class="ex-top">
+      <div class="ex-stat"><b>${e.tickets.length || '—'}</b><i>билетов</i></div>
+      <div class="ex-stat"><b>${done.length}</b><i>отвечено</i></div>
+      <div class="ex-stat"><b>${avg || '—'}</b><i>средний балл</i></div>
+    </div>
+    ${e.tickets.length ? `<div class="tick-list">${e.tickets.map((t, i) => {
+      const d = e.done[i];
+      return `<button class="tick ${d ? 'ok s' + Math.round(d.score) : ''}" data-i="${i}">
+        <span class="tn">${i + 1}</span><span class="tt">${esc(t)}</span>
+        ${d ? `<span class="ts">${d.score}</span>` : ''}</button>`;
+    }).join('')}</div>`
+    : `<div class="st-empty"><div class="big">🎓</div>
+        <p>Билетов пока нет</p>
+        <p class="sm">Вставь список билетов — или жми «Начать», и вопросы придумает ИИ по твоим конспектам.</p></div>`}`;
+
+  $$('.tick').forEach(b => b.onclick = () => startExam(fid, +b.dataset.i));
+}
+
+$('#ex-start').onclick = () => {
+  const fid = $('#ex-folder').value;
+  if (!fid) return toast('Сначала создай предмет');
+  const e = examOf(fid);
+  if (!e.tickets.length) return startExam(fid, null);
+  /* берём первый неотвеченный, иначе самый слабый */
+  const next = e.tickets.findIndex((_, i) => !e.done[i]);
+  startExam(fid, next >= 0 ? next : weakest(e));
+};
+
+const weakest = e => Object.entries(e.done).sort((a, b) => a[1].score - b[1].score)[0]?.[0] | 0;
+
+async function startExam(fid, idx) {
+  const f = data.folders.find(x => x.id === fid);
+  const text = f.notes.map(n => `${n.title}\n${htmlToText(n.html)}`).join('\n\n');
+  if (text.trim().length < 80) return toast('Сначала наполни конспекты по предмету');
+
+  let q = idx === null ? null : examOf(fid).tickets[idx];
+  if (!q) {
+    $('#ex-area').innerHTML = '<div class="st-empty"><span class="dots">Придумываю вопрос</span></div>';
+    try {
+      const raw = await groq([
+        { role: 'system', content: 'Ты преподаватель. Отвечай ТОЛЬКО валидным JSON.' },
+        { role: 'user', content: `Придумай один экзаменационный вопрос по конспектам, требующий развёрнутого устного ответа. Строго по материалу. Формат: {"q":"вопрос"}\n\n${text.slice(0, 8000)}` },
+      ], 'medium');
+      q = JSON.parse(raw.slice(raw.indexOf('{'), raw.lastIndexOf('}') + 1)).q;
+    } catch (e) { return toast('Не вышло: ' + e.message); }
+  }
+
+  ex = { fid, q, idx, text };
+  $('#ex-area').innerHTML = `
+    <div class="ex-card">
+      <div class="ex-q">${esc(q)}</div>
+      <textarea id="ex-ans" placeholder="Отвечай своими словами, как на зачёте…"></textarea>
+      <div class="ex-acts">
+        <button id="ex-skip">Другой вопрос</button>
+        <button id="ex-check" class="primary">Проверить</button>
+      </div>
+      <div id="ex-out"></div>
+    </div>`;
+  $('#ex-ans').focus();
+  $('#ex-skip').onclick = () => $('#ex-start').click();
+  $('#ex-check').onclick = checkExam;
+}
+
+async function checkExam() {
+  const ans = $('#ex-ans').value.trim();
+  if (ans.length < 15) return toast('Напиши ответ развёрнутее');
+  $('#ex-out').innerHTML = '<span class="dots">Проверяю</span>';
+
+  try {
+    const raw = await groq([
+      { role: 'system', content: 'Ты строгий, но доброжелательный преподаватель. Проверяешь ответ студента ТОЛЬКО по его конспекту. Отвечай ТОЛЬКО валидным JSON.' },
+      { role: 'user', content: `Вопрос: ${ex.q}
+
+Ответ студента:
+${ans}
+
+Оцени ответ по пятибалльной шкале, опираясь исключительно на конспект ниже. Формат:
+{"score":4,"good":["что раскрыто верно"],"miss":["чего не хватило или что неверно"],"src":"цитата из конспекта по теме вопроса"}
+Если в конспекте нет материала по вопросу — поставь null в score и напиши это в miss.
+
+Конспект:
+${ex.text.slice(0, 10000)}` },
+    ], 'medium');
+    const r = JSON.parse(raw.slice(raw.indexOf('{'), raw.lastIndexOf('}') + 1));
+    const score = Number(r.score);
+
+    if (ex.idx !== null && Number.isFinite(score)) {
+      examOf(ex.fid).done[ex.idx] = { score, ts: Date.now() };
+      save();
+    }
+
+    $('#ex-out').innerHTML = `
+      <div class="ex-res ${score >= 4 ? 'good' : score >= 3 ? 'mid' : 'bad'}">
+        <div class="ex-score">${Number.isFinite(score) ? score : '—'}<span>/5</span></div>
+        <div class="ex-body">
+          ${r.good?.length ? `<b>Верно</b><ul>${r.good.map(s => `<li>${esc(s)}</li>`).join('')}</ul>` : ''}
+          ${r.miss?.length ? `<b>Не хватило</b><ul>${r.miss.map(s => `<li>${esc(s)}</li>`).join('')}</ul>` : ''}
+          ${r.src ? `<span class="q-src">«${esc(r.src)}»</span>` : ''}
+        </div>
+      </div>
+      <div class="ex-acts">
+        <button id="ex-again">Ответить заново</button>
+        <button id="ex-next" class="primary">Следующий билет</button>
+      </div>`;
+    $('#ex-again').onclick = () => startExam(ex.fid, ex.idx);
+    $('#ex-next').onclick = () => $('#ex-start').click();
+  } catch (e) {
+    $('#ex-out').innerHTML = `<p class="sm">Не вышло проверить: ${esc(e.message)}</p>`;
+  }
+}
+
 /* ================= ИМПОРТ И СХЕМЫ ================= */
 
 /* --- схема-паутинка --- */
@@ -1548,10 +1702,12 @@ function drawProfile() {
 
 $$('.st-tab').forEach(t => t.onclick = () => {
   $$('.st-tab').forEach(x => x.classList.toggle('on', x === t));
-  const isCards = t.dataset.st === 'cards';
-  $('#st-cards').classList.toggle('hidden', !isCards);
-  $('#st-tests').classList.toggle('hidden', isCards);
-  if (isCards) drawCards();
+  const mode = t.dataset.st;
+  $('#st-cards').classList.toggle('hidden', mode !== 'cards');
+  $('#st-tests').classList.toggle('hidden', mode !== 'tests');
+  $('#st-exam').classList.toggle('hidden', mode !== 'exam');
+  if (mode === 'cards') drawCards();
+  if (mode === 'exam') drawExam();
 });
 
 function fillPickers() {

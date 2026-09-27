@@ -17,7 +17,7 @@
 <meta property="og:url" content="https://clarityapp.ru/">
 <meta property="og:image" content="https://clarityapp.ru/logo.svg">
 <meta property="og:locale" content="ru_RU">
-<link rel="stylesheet" href="style.css?v=32">
+<link rel="stylesheet" href="style.css?v=33">
 </head>
 <body>
 
@@ -244,6 +244,7 @@
       <div class="st-tabs">
         <button class="st-tab on" data-st="cards">🎴 Карточки</button>
         <button class="st-tab" data-st="tests">📝 Тесты</button>
+        <button class="st-tab" data-st="exam">🎓 Зачёт</button>
       </div>
 
       <div id="st-cards" class="st-pane">
@@ -253,6 +254,15 @@
           <button id="card-all">Вся колода</button>
         </div>
         <div id="card-area"></div>
+      </div>
+
+      <div id="st-exam" class="st-pane hidden">
+        <div class="st-head">
+          <select id="ex-folder"></select>
+          <button id="ex-tickets">Билеты</button>
+          <button id="ex-start" class="primary">Начать</button>
+        </div>
+        <div id="ex-area"></div>
       </div>
 
       <div id="st-tests" class="st-pane hidden">
@@ -349,6 +359,19 @@
   </div>
 </div>
 
+<!-- БИЛЕТЫ -->
+<div id="tick-modal" class="modal hidden">
+  <div class="modal-box wide-box">
+    <h3>Билеты к зачёту</h3>
+    <p class="hint">По одному вопросу в строке. Если оставить пусто, вопросы придумает ИИ по конспектам.</p>
+    <textarea id="tick-text" placeholder="1. Понятие и признаки государства&#10;2. Формы правления&#10;3. Политические режимы"></textarea>
+    <div class="row">
+      <button id="tick-cancel">Отмена</button>
+      <button id="tick-save" class="primary">Сохранить</button>
+    </div>
+  </div>
+</div>
+
 <!-- ИМПОРТ -->
 <div id="imp-modal" class="modal hidden">
   <div class="modal-box wide-box">
@@ -392,6 +415,6 @@
 <input type="file" id="file-input" multiple hidden>
 <div id="toast" class="toast"></div>
 
-<script src="app.js?v=32"></script>
+<script src="app.js?v=33"></script>
 </body>
 </html>

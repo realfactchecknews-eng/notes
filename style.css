@@ -691,3 +691,43 @@ input:focus,textarea:focus,select:focus{border-color:var(--acc);box-shadow:0 0 0
 #imp-modal .fld{flex:1;margin:0}
 .body img.mindmap{background:#0f1830;padding:10px;border-radius:16px}
 .ai-add{color:var(--acc2);border-bottom:1px dashed #3b82f666}
+
+/* ---------- ЗАЧЁТ ---------- */
+.ex-top{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:16px}
+.ex-stat{background:var(--panel);border:1px solid var(--line);border-radius:14px;
+  padding:13px 10px;text-align:center}
+.ex-stat b{display:block;font-size:21px}
+.ex-stat i{font-style:normal;font-size:11.5px;color:var(--dim)}
+.tick-list{display:flex;flex-direction:column;gap:6px}
+.tick{display:flex;align-items:center;gap:11px;text-align:left;padding:11px 13px;
+  border-radius:12px;font-size:13.5px;animation:cardIn .35s var(--ease) both}
+.tick .tn{flex:none;width:23px;height:23px;border-radius:7px;background:#ffffff0d;
+  display:grid;place-content:center;font-size:11.5px;color:var(--dim)}
+.tick .tt{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tick .ts{flex:none;font-weight:700;font-size:13px}
+.tick.ok{border-color:#3b82f655}
+.tick.ok .tn{background:#3b82f62e;color:var(--acc2)}
+.tick.s5 .ts,.tick.s4 .ts{color:var(--ok)}
+.tick.s3 .ts{color:#fbbf24}
+.tick.s2 .ts,.tick.s1 .ts,.tick.s0 .ts{color:var(--danger)}
+
+.ex-card{animation:enter .35s var(--ease)}
+.ex-q{font-size:19px;font-weight:600;line-height:1.5;margin-bottom:14px}
+#ex-ans{min-height:190px;resize:vertical;line-height:1.7;font-size:14.5px}
+.ex-acts{display:flex;gap:8px;justify-content:flex-end;margin-top:12px}
+.ex-res{display:flex;gap:16px;margin-top:18px;padding:16px;border-radius:16px;
+  background:var(--panel);border:1px solid var(--line);animation:rise .35s var(--ease)}
+.ex-res.good{border-color:#34d39966;box-shadow:0 0 26px #34d39914}
+.ex-res.mid{border-color:#fbbf2466}
+.ex-res.bad{border-color:#f8717166}
+.ex-score{flex:none;font-size:34px;font-weight:700;line-height:1}
+.ex-score span{font-size:14px;color:var(--dim)}
+.ex-res.good .ex-score{color:#6ee7b7}
+.ex-res.mid .ex-score{color:#fcd34d}
+.ex-res.bad .ex-score{color:#fca5a5}
+.ex-body{flex:1;font-size:13.5px;line-height:1.6}
+.ex-body b{display:block;margin:6px 0 2px;font-size:12.5px;color:var(--dim);
+  text-transform:uppercase;letter-spacing:.5px}
+.ex-body ul{margin:0;padding-left:18px}
+.ex-body li{margin:3px 0}
+#tick-text{min-height:200px;resize:vertical;line-height:1.7}
