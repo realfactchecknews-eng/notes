@@ -672,6 +672,8 @@ img{max-width:100%;border:1px solid #dbeafe;border-radius:2mm;margin:3mm 0}
 hr{border:none;height:1px;background:#dbeafe;margin:6mm 0}
 .att{font-size:10pt;color:#64748b;margin-top:5mm;font-family:Arial,sans-serif}
 .att b{color:#1d4ed8}
+.ai-add{color:#1d4ed8}
+img.mindmap{display:block;margin:5mm auto;max-width:100%}
 .sign{margin-top:12mm;padding-top:4mm;border-top:1px solid #dbeafe;text-align:center;
   font:9.5pt Arial,sans-serif;letter-spacing:2px;color:#93a3bd;text-transform:uppercase}
 `;
@@ -1118,6 +1120,186 @@ addEventListener('keydown', e => {
     closeSidebar();
   }
 });
+
+
+/* ================= ИМПОРТ И СХЕМЫ ================= */
+
+/* --- схема-паутинка --- */
+/* Рисуем на canvas в PNG: так картинка одинаково живёт в конспекте, в PDF и в Word.
+   Капсулы светлые, фон прозрачный — читается и на тёмной странице, и на белой бумаге. */
+function drawMap(tree, scale = 2) {
+  const W = 1180, H = 820;
+  const c = document.createElement('canvas');
+  c.width = W * scale; c.height = H * scale;
+  const x = c.getContext('2d');
+  x.scale(scale, scale);
+  x.textAlign = 'center';
+  x.textBaseline = 'middle';
+
+  const cap = (text, cx, cy, size, fill, color, bold) => {
+    x.font = `${bold ? '600 ' : ''}${size}px -apple-system, Segoe UI, sans-serif`;
+    const lines = wrap(x, String(text), size > 15 ? 190 : 150);
+    const lh = size * 1.25;
+    const w = Math.max(...lines.map(l => x.measureText(l).width)) + size * 1.5;
+    const h = lines.length * lh + size * 0.9;
+    const r = h / 2;
+    x.beginPath();
+    x.roundRect(cx - w / 2, cy - h / 2, w, h, r);
+    x.fillStyle = fill; x.fill();
+    x.strokeStyle = '#2563eb55'; x.lineWidth = 1.2; x.stroke();
+    x.fillStyle = color;
+    lines.forEach((l, i) => x.fillText(l, cx, cy - (lines.length - 1) * lh / 2 + i * lh));
+    return { w, h };
+  };
+
+  const edge = (x1, y1, x2, y2, width, color) => {
+    x.beginPath();
+    x.moveTo(x1, y1);
+    const mx = (x1 + x2) / 2, my = (y1 + y2) / 2;
+    x.quadraticCurveTo(mx + (y2 - y1) * 0.12, my - (x2 - x1) * 0.12, x2, y2);
+    x.strokeStyle = color; x.lineWidth = width; x.lineCap = 'round';
+    x.stroke();
+  };
+
+  const cx = W / 2, cy = H / 2;
+  const branches = (tree.c || []).slice(0, 8);
+  const R1 = branches.length > 5 ? 235 : 210;
+
+  branches.forEach((b, i) => {
+    const a = i * 2 * Math.PI / branches.length - Math.PI / 2;
+    const bx = cx + Math.cos(a) * R1, by = cy + Math.sin(a) * R1 * 0.78;
+    edge(cx, cy, bx, by, 3, '#2563eb99');
+
+    const kids = (b.c || []).slice(0, 5);
+    kids.forEach((k, j) => {
+      const spread = Math.min(0.85, 0.3 + kids.length * 0.12);
+      const ka = a + (j - (kids.length - 1) / 2) * spread / Math.max(1, kids.length - 1) * 2;
+      const R2 = R1 + 150;
+      const kx = cx + Math.cos(ka) * R2, ky = cy + Math.sin(ka) * R2 * 0.82;
+      edge(bx, by, kx, ky, 1.6, '#60a5fa66');
+      cap(k.t, kx, ky, 12.5, '#f8fbff', '#1e3a5f');
+    });
+
+    cap(b.t, bx, by, 15, '#dbeafe', '#12306e', true);
+  });
+
+  cap(tree.t, cx, cy, 19, '#2563eb', '#ffffff', true);
+  return c.toDataURL('image/png');
+}
+
+function wrap(ctx, text, max) {
+  const words = text.split(' '), lines = [];
+  let line = '';
+  for (const w of words) {
+    const t = line ? line + ' ' + w : w;
+    if (ctx.measureText(t).width > max && line) { lines.push(line); line = w; }
+    else line = t;
+  }
+  if (line) lines.push(line);
+  return lines.slice(0, 3);
+}
+
+/* просим модель разложить конспект на дерево и рисуем */
+async function makeMap(text, title) {
+  const raw = await groq([
+    { role: 'system', content: 'Ты строишь схемы-классификации по учебным текстам. Отвечай ТОЛЬКО валидным JSON.' },
+    { role: 'user', content: `Разложи конспект в дерево для схемы: центр — тема, вокруг 3–7 главных ветвей, у каждой до 5 подпунктов. Формулировки короткие, 1–4 слова, строго по тексту. Формат:\n{"t":"тема","c":[{"t":"ветвь","c":[{"t":"подпункт"}]}]}\n\nКонспект «${title}»:\n${text.slice(0, 8000)}` },
+  ], 'medium');
+  const tree = JSON.parse(raw.slice(raw.indexOf('{'), raw.lastIndexOf('}') + 1));
+  if (!tree.c?.length) throw new Error('в тексте нет классификаций');
+  return drawMap(tree);
+}
+
+/* --- импорт --- */
+$('#btn-import').onclick = () => {
+  const f = $('#imp-folder');
+  f.innerHTML = data.folders.map(x => `<option value="${x.id}">${esc(x.name)}</option>`).join('')
+    + '<option value="">+ новый предмет</option>';
+  if (curFolder) f.value = curFolder.id;
+  $('#imp-text').value = '';
+  $('#imp-title').value = '';
+  show($('#imp-modal'));
+};
+$('#imp-cancel').onclick = () => hide($('#imp-modal'));
+
+/* файл можно просто бросить в окно импорта */
+const impBox = () => $('#imp-modal');
+['dragover', 'drop'].forEach(ev => document.addEventListener(ev, e => {
+  if ($('#imp-modal').classList.contains('hidden')) return;
+  e.preventDefault();
+  if (ev !== 'drop') return;
+  const file = e.dataTransfer.files[0];
+  if (!file) return;
+  file.text().then(t => {
+    $('#imp-text').value = t;
+    if (!$('#imp-title').value) $('#imp-title').value = file.name.replace(/\.[^.]+$/, '');
+  });
+}));
+
+$('#imp-go').onclick = async () => {
+  const raw = $('#imp-text').value.trim();
+  if (raw.length < 40) return toast('Слишком мало текста');
+
+  let folder = data.folders.find(f => f.id === $('#imp-folder').value);
+  if (!folder) {
+    const name = await ask('Название предмета');
+    if (!name) return;
+    folder = { id: uid(), name, open: true, notes: [] };
+    data.folders.push(folder);
+  }
+
+  const more = $('#imp-more').checked, withMap = $('#imp-map').checked;
+  hide($('#imp-modal'));
+  toast('Оформляю конспект…');
+
+  try {
+    const html = await groq([
+      { role: 'system', content: 'Ты оформляешь учебные конспекты. Отвечай ТОЛЬКО чистым HTML без markdown, без <html> и <body>.' },
+      { role: 'user', content: `Оформи сырой конспект: разбей на разделы с заголовками h2 и h3, выдели термины через <b>, списки через ul/ol, сравнения и классификации — таблицей, важные мысли — blockquote. Сохрани ВСЕ факты исходника, ничего не выбрасывай и не сокращай.
+${more
+  ? 'Дополни: раскрой сокращения, добавь короткие пояснения и примеры к сложным местам. Каждое своё дополнение оберни в <span class="ai-add">…</span>, чтобы его было видно.'
+  : 'Ничего не добавляй от себя — только оформление имеющегося.'}
+
+Сырой текст:
+${raw.slice(0, 14000)}` },
+    ], 'medium');
+
+    const title = $('#imp-title').value.trim()
+      || (html.match(/<h2[^>]*>(.*?)<\/h2>/i)?.[1] || '').replace(/<[^>]+>/g, '').trim()
+      || 'Импортированный конспект';
+
+    let body = html.replace(/```html|```/g, '').trim();
+
+    if (withMap) {
+      toast('Рисую схему…');
+      try {
+        const png = await makeMap(htmlToText(body) || raw, title);
+        body += `<p><img class="mindmap" src="${png}" alt="Схема: ${esc(title)}"></p>`;
+      } catch (e) { toast('Схему не получилось: ' + e.message); }
+    }
+
+    const n = { id: uid(), title, html: body, files: [], ts: Date.now() };
+    folder.notes.unshift(n);
+    folder.open = true;
+    stats().created++;
+    save(n.id); render();
+    openNote(folder, n);
+    toast('Готово');
+  } catch (e) {
+    toast('Не вышло: ' + e.message);
+  }
+};
+
+/* схему можно построить и для готового конспекта */
+$('#ai-map').onclick = async () => {
+  if (!cur) return;
+  toast('Рисую схему…');
+  try {
+    const png = await makeMap(htmlToText(cur.html), cur.title || 'конспект');
+    insert(`<p><img class="mindmap" src="${png}" alt="Схема"></p>`);
+    toast('Схема готова');
+  } catch (e) { toast('Не вышло: ' + e.message); }
+};
 
 /* ================= УЧЁБА: карточки и тесты ================= */
 

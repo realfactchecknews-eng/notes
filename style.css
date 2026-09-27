@@ -683,3 +683,11 @@ input:focus,textarea:focus,select:focus{border-color:var(--acc);box-shadow:0 0 0
 .about-link:hover{color:var(--acc2)}
 .q-src{display:block;margin-top:8px;padding-left:10px;border-left:2px solid #3b82f666;
   color:var(--dim);font-size:12.5px;font-style:italic}
+
+/* импорт и схемы */
+.wide-box{width:min(620px,94vw)}
+#imp-text{min-height:210px;resize:vertical;font-size:13.5px;line-height:1.6}
+#imp-modal .row-2{gap:10px}
+#imp-modal .fld{flex:1;margin:0}
+.body img.mindmap{background:#0f1830;padding:10px;border-radius:16px}
+.ai-add{color:var(--acc2);border-bottom:1px dashed #3b82f666}
