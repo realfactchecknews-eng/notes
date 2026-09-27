@@ -23,3 +23,40 @@ CREATE TABLE IF NOT EXISTS notes (
   PRIMARY KEY (uid, id)
 );
 CREATE INDEX IF NOT EXISTS notes_uid ON notes(uid);
+
+-- Опубликованные конспекты и сборники предметов
+CREATE TABLE IF NOT EXISTS shares (
+  code   TEXT PRIMARY KEY,
+  uid    TEXT NOT NULL,
+  kind   TEXT NOT NULL,          -- note | folder
+  title  TEXT,
+  author TEXT,
+  json   TEXT NOT NULL,
+  views  INTEGER DEFAULT 0,
+  ts     INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS shares_uid ON shares(uid);
+
+-- Группы одногруппников
+CREATE TABLE IF NOT EXISTS groups (
+  id    TEXT PRIMARY KEY,
+  code  TEXT UNIQUE NOT NULL,
+  name  TEXT NOT NULL,
+  owner TEXT NOT NULL,
+  ts    INTEGER NOT NULL
+);
+CREATE TABLE IF NOT EXISTS members (
+  gid   TEXT NOT NULL,
+  uid   TEXT NOT NULL,
+  email TEXT,
+  ts    INTEGER NOT NULL,
+  PRIMARY KEY (gid, uid)
+);
+-- Что выложено в группу
+CREATE TABLE IF NOT EXISTS posts (
+  gid  TEXT NOT NULL,
+  code TEXT NOT NULL,
+  uid  TEXT NOT NULL,
+  ts   INTEGER NOT NULL,
+  PRIMARY KEY (gid, code)
+);

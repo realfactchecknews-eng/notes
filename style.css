@@ -731,3 +731,46 @@ input:focus,textarea:focus,select:focus{border-color:var(--acc);box-shadow:0 0 0
 .ex-body ul{margin:0;padding-left:18px}
 .ex-body li{margin:3px 0}
 #tick-text{min-height:200px;resize:vertical;line-height:1.7}
+
+/* ---------- ССЫЛКИ И ГРУППЫ ---------- */
+.link-row{display:flex;gap:8px}
+.link-row input{font-size:13px}
+.link-groups{display:flex;flex-wrap:wrap;gap:6px}
+.link-groups .hint{width:100%;margin:4px 0 0}
+.gpost{font-size:12.5px;padding:7px 11px}
+.gpost:disabled{opacity:.6;color:var(--ok)}
+
+.grp{display:flex;align-items:center;gap:10px;background:var(--panel);border:1px solid var(--line);
+  border-radius:12px;padding:11px 13px;margin-bottom:6px;font-size:13.5px}
+.grp>div{flex:1;min-width:0}
+.grp b{display:block}
+.grp span{font-size:12px;color:var(--dim)}
+.grp-acts{display:flex;gap:8px;margin-top:8px}
+.grp-acts button{flex:1}
+.post{display:flex;align-items:center;gap:10px;padding:9px 12px;border-radius:11px;
+  background:#ffffff06;margin-bottom:5px;font-size:13.5px;animation:cardIn .3s var(--ease) both}
+.post>div{flex:1;min-width:0}
+.post b{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.post span{font-size:11.5px;color:var(--dim)}
+
+/* чужой конспект по ссылке */
+.guest-view{position:fixed;inset:0;z-index:70;overflow:auto;background:var(--bg);
+  animation:fade .3s var(--ease)}
+.gv-wrap{max-width:860px;margin:0 auto;padding:34px 30px 90px}
+.gv-head{display:flex;justify-content:space-between;gap:20px;align-items:flex-start;
+  padding-bottom:20px;border-bottom:1px solid var(--line);margin-bottom:26px}
+.gv-kind{font-size:12px;color:var(--acc2);text-transform:uppercase;letter-spacing:.7px}
+.gv-head h1{font-size:30px;letter-spacing:-1px;margin:6px 0 4px}
+.gv-meta{color:var(--dim);font-size:13px;margin:0}
+.gv-acts{display:flex;gap:8px;flex-wrap:wrap;flex:none}
+.gv-body article{margin-bottom:34px;animation:cardIn .4s var(--ease) both}
+.gv-body h2{font-size:22px;color:var(--acc2);margin:0 0 10px}
+.gv-body img{max-width:100%;border-radius:14px;border:1px solid var(--line)}
+.gv-body table{border-collapse:collapse;width:100%;margin:14px 0}
+.gv-body td,.gv-body th{border:1px solid var(--line);padding:8px 10px}
+.gv-body blockquote{border-left:3px solid var(--acc);margin:12px 0;padding:2px 14px;color:var(--acc2)}
+@media(max-width:620px){
+  .gv-wrap{padding:20px 16px 80px}
+  .gv-head{flex-direction:column}
+  .gv-head h1{font-size:24px}
+}

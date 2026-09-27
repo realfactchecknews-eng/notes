@@ -96,6 +96,11 @@ async function checkGoogle(idToken, clientId) {
 }
 const clean = s => String(s || '').trim().toLowerCase();
 
+/* короткий код для ссылки: без похожих друг на друга символов */
+const ABC = 'abcdefghjkmnpqrstuvwxyz23456789';
+const shortCode = (n = 7) => [...crypto.getRandomValues(new Uint8Array(n))]
+  .map(b => ABC[b % ABC.length]).join('');
+
 export default {
   async fetch(req, env) {
     if (req.method === 'OPTIONS') return json({});
@@ -149,6 +154,16 @@ export default {
         return json({ token: await sign({ id: u.id, email: mail, exp: Date.now() / 1000 + TTL }, secret), email: mail });
       }
 
+      /* ---- открыть опубликованное по ссылке (без входа) ---- */
+      if (path.startsWith('/s/') && req.method === 'GET') {
+        const code = path.slice(3).toLowerCase();
+        const s = await env.DB.prepare(
+          'SELECT code, kind, title, author, json, views, ts FROM shares WHERE code = ?').bind(code).first();
+        if (!s) return bad('Ссылка не найдена или отозвана', 404);
+        env.DB.prepare('UPDATE shares SET views = views + 1 WHERE code = ?').bind(code).run();
+        return json({ ...s, json: JSON.parse(s.json) });
+      }
+
       /* ---- включён ли вход через Google ---- */
       if (path === '/config' && req.method === 'GET') {
         return json({ googleClientId: env.GOOGLE_CLIENT_ID || null });
@@ -200,6 +215,102 @@ export default {
         const u = await env.DB.prepare('SELECT hash FROM users WHERE id = ?').bind(me.id).first();
         if (!u || !await verify(old, u.hash)) return bad('Старый пароль неверен', 401);
         await env.DB.prepare('UPDATE users SET hash = ? WHERE id = ?').bind(await hash(fresh), me.id).run();
+        return json({ ok: true });
+      }
+
+      /* ---- опубликовать конспект или сборник предмета ---- */
+      if (path === '/share' && req.method === 'POST') {
+        const { kind, title, payload } = await req.json();
+        if (!['note', 'folder'].includes(kind)) return bad('Непонятно, что публикуем');
+        const body = JSON.stringify(payload || {});
+        if (body.length > 4_000_000) return bad('Слишком большой конспект для ссылки');
+
+        const code = shortCode();
+        await env.DB.prepare(
+          'INSERT INTO shares (code, uid, kind, title, author, json, ts) VALUES (?, ?, ?, ?, ?, ?, ?)')
+          .bind(code, me.id, kind, String(title || '').slice(0, 200), me.email, body, Date.now()).run();
+        return json({ code });
+      }
+
+      /* ---- свои публикации ---- */
+      if (path === '/shares' && req.method === 'GET') {
+        const r = await env.DB.prepare(
+          'SELECT code, kind, title, views, ts FROM shares WHERE uid = ? ORDER BY ts DESC LIMIT 50')
+          .bind(me.id).all();
+        return json({ list: r.results || [] });
+      }
+
+      if (path.startsWith('/share/') && req.method === 'DELETE') {
+        const code = path.slice(7).toLowerCase();
+        await env.DB.batch([
+          env.DB.prepare('DELETE FROM shares WHERE code = ? AND uid = ?').bind(code, me.id),
+          env.DB.prepare('DELETE FROM posts WHERE code = ? AND uid = ?').bind(code, me.id),
+        ]);
+        return json({ ok: true });
+      }
+
+      /* ---- группы ---- */
+      if (path === '/group' && req.method === 'POST') {
+        const { name } = await req.json();
+        if (!String(name || '').trim()) return bad('Нужно название');
+        const id = uid(), code = shortCode(6);
+        await env.DB.batch([
+          env.DB.prepare('INSERT INTO groups (id, code, name, owner, ts) VALUES (?, ?, ?, ?, ?)')
+            .bind(id, code, String(name).slice(0, 80), me.id, Date.now()),
+          env.DB.prepare('INSERT INTO members (gid, uid, email, ts) VALUES (?, ?, ?, ?)')
+            .bind(id, me.id, me.email, Date.now()),
+        ]);
+        return json({ id, code, name });
+      }
+
+      if (path === '/group/join' && req.method === 'POST') {
+        const { code } = await req.json();
+        const g = await env.DB.prepare('SELECT id, name FROM groups WHERE code = ?')
+          .bind(clean(code)).first();
+        if (!g) return bad('Группа не найдена', 404);
+        await env.DB.prepare(
+          'INSERT OR IGNORE INTO members (gid, uid, email, ts) VALUES (?, ?, ?, ?)')
+          .bind(g.id, me.id, me.email, Date.now()).run();
+        return json(g);
+      }
+
+      if (path === '/groups' && req.method === 'GET') {
+        const r = await env.DB.prepare(`
+          SELECT g.id, g.code, g.name, g.owner,
+                 (SELECT COUNT(*) FROM members m2 WHERE m2.gid = g.id) AS people
+          FROM groups g JOIN members m ON m.gid = g.id
+          WHERE m.uid = ? ORDER BY g.ts DESC`).bind(me.id).all();
+        return json({ list: r.results || [] });
+      }
+
+      /* лента группы: что выложили одногруппники */
+      if (path.startsWith('/group/') && path.endsWith('/feed') && req.method === 'GET') {
+        const gid = path.slice(7, -5);
+        const mine = await env.DB.prepare('SELECT 1 FROM members WHERE gid = ? AND uid = ?')
+          .bind(gid, me.id).first();
+        if (!mine) return bad('Ты не в этой группе', 403);
+        const r = await env.DB.prepare(`
+          SELECT s.code, s.kind, s.title, s.author, s.views, p.ts, (p.uid = ?) AS own
+          FROM posts p JOIN shares s ON s.code = p.code
+          WHERE p.gid = ? ORDER BY p.ts DESC LIMIT 100`).bind(me.id, gid).all();
+        return json({ list: r.results || [] });
+      }
+
+      /* выложить публикацию в группу */
+      if (path.startsWith('/group/') && path.endsWith('/post') && req.method === 'POST') {
+        const gid = path.slice(7, -5);
+        const { code } = await req.json();
+        const mine = await env.DB.prepare('SELECT 1 FROM members WHERE gid = ? AND uid = ?')
+          .bind(gid, me.id).first();
+        if (!mine) return bad('Ты не в этой группе', 403);
+        await env.DB.prepare('INSERT OR IGNORE INTO posts (gid, code, uid, ts) VALUES (?, ?, ?, ?)')
+          .bind(gid, code, me.id, Date.now()).run();
+        return json({ ok: true });
+      }
+
+      if (path.startsWith('/group/') && path.endsWith('/leave') && req.method === 'POST') {
+        const gid = path.slice(7, -6);
+        await env.DB.prepare('DELETE FROM members WHERE gid = ? AND uid = ?').bind(gid, me.id).run();
         return json({ ok: true });
       }
 

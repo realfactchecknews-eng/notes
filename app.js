@@ -201,6 +201,8 @@ async function pullCloud() {
 async function enter(who, tok) {
   token = tok || null;
   me = who;
+  cur = curFolder = null;          // от прошлого входа ничего не тянем
+  dirty.clear(); dropped.clear();
   localStorage.setItem('last', who);
   if (tok) localStorage.setItem('token', tok);
 
@@ -240,6 +242,7 @@ async function enter(who, tok) {
   render();
   refreshBadge();
   showStart();
+  checkHash();
 }
 
 /* --- кнопки --- */
@@ -1125,6 +1128,204 @@ addEventListener('keydown', e => {
 
 
 
+
+/* ================= ССЫЛКИ И ОДНОГРУППНИКИ ================= */
+
+const SITE = location.origin + location.pathname.replace(/[^/]*$/, '');
+
+/* --- публикация --- */
+async function share(kind, payload, title) {
+  if (!cloud()) return toast('Ссылки работают только с аккаунтом');
+  toast('Публикую…');
+  try {
+    const { code } = await api('/share', 'POST', { kind, payload, title });
+    showLink(code, title);
+  } catch (e) { toast('Не вышло: ' + e.message); }
+}
+
+$('#btn-share').onclick = () => cur && share('note',
+  { title: cur.title, html: cur.html, files: cur.files || [], folder: curFolder?.name },
+  cur.title || 'Конспект');
+
+/* сборник: весь предмет одной ссылкой */
+function shareFolder(f) {
+  share('folder', {
+    name: f.name,
+    notes: f.notes.map(n => ({ title: n.title, html: n.html, files: n.files || [] })),
+    cards: (data.cards || []).filter(c => c.folder === f.id).map(c => ({ term: c.term, def: c.def })),
+    tickets: (data.exam?.[f.id]?.tickets) || [],
+  }, f.name);
+}
+
+async function showLink(code, title) {
+  const url = SITE + '#s=' + code;
+  $('#link-title').textContent = 'Ссылка на «' + (title || 'конспект') + '»';
+  $('#link-url').value = url;
+  $('#link-groups').innerHTML = '<span class="dots">Загружаю группы</span>';
+  show($('#link-modal'));
+
+  $('#link-copy').onclick = async () => {
+    try { await navigator.clipboard.writeText(url); toast('Ссылка скопирована'); }
+    catch { $('#link-url').select(); }
+  };
+  $('#link-close').onclick = () => hide($('#link-modal'));
+
+  try {
+    const { list } = await api('/groups');
+    $('#link-groups').innerHTML = list.length
+      ? `<p class="hint">Выложить в группу:</p>${list.map(g =>
+          `<button class="gpost" data-id="${g.id}">${esc(g.name)} · ${g.people}</button>`).join('')}`
+      : '<p class="hint">Группы пока нет — создать можно в личном кабинете.</p>';
+    $$('.gpost').forEach(b => b.onclick = async () => {
+      try {
+        await api(`/group/${b.dataset.id}/post`, 'POST', { code });
+        b.textContent = '✓ выложено';
+        b.disabled = true;
+      } catch (e) { toast(e.message); }
+    });
+  } catch { $('#link-groups').innerHTML = ''; }
+}
+
+/* --- открытие чужой ссылки --- */
+async function openShared(code) {
+  const box = $('#guest-view');
+  box.classList.remove('hidden');
+  box.innerHTML = '<div class="gv-wrap"><span class="dots">Открываю конспект</span></div>';
+
+  try {
+    const s = await api('/s/' + code);
+    const p = s.json;
+    const isFolder = s.kind === 'folder';
+    const notes = isFolder ? p.notes : [p];
+
+    box.innerHTML = `<div class="gv-wrap">
+      <div class="gv-head">
+        <div>
+          <div class="gv-kind">${isFolder ? 'Сборник предмета' : 'Конспект'} · от ${esc(s.author || 'кого-то')}</div>
+          <h1>${esc(s.title || p.name || p.title || 'Без названия')}</h1>
+          <p class="gv-meta">${notes.length} ${plural(notes.length, 'конспект', 'конспекта', 'конспектов')}${
+            p.cards?.length ? ` · ${p.cards.length} карточек` : ''}${
+            p.tickets?.length ? ` · ${p.tickets.length} билетов` : ''}</p>
+        </div>
+        <div class="gv-acts">
+          <button id="gv-take" class="primary">Добавить себе</button>
+          <button id="gv-pdf">Скачать PDF</button>
+          <button id="gv-close">Закрыть</button>
+        </div>
+      </div>
+      <div class="gv-body">${notes.map(n =>
+        `<article><h2>${esc(n.title || 'Без названия')}</h2>${n.html || ''}</article>`).join('')}</div>
+    </div>`;
+
+    $('#gv-close').onclick = () => { location.hash = ''; box.classList.add('hidden'); };
+
+    $('#gv-pdf').onclick = async () => {
+      const fake = notes.map(n => ({ ...n, ts: Date.now(), files: n.files || [] }));
+      const html = await docPage(fake, s.title || 'Конспект', true, false);
+      const fr = document.createElement('iframe');
+      fr.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:0';
+      fr.srcdoc = html;
+      fr.onload = () => { fr.contentWindow.focus(); fr.contentWindow.print(); };
+      document.body.appendChild(fr);
+    };
+
+    $('#gv-take').onclick = async () => {
+      if (!data) return toast('Сначала зайди в приложение');
+      const here = f => data.folders.includes(f) ? f : null;
+      const folder = isFolder
+        ? { id: uid(), name: p.name || s.title, open: true, notes: [] }
+        : (here(curFolder) || data.folders[0]
+           || { id: uid(), name: p.folder || 'Из ссылки', open: true, notes: [] });
+      if (!data.folders.includes(folder)) data.folders.push(folder);
+
+      for (const n of notes) {
+        const copy = { id: uid(), title: n.title, html: n.html, files: n.files || [], ts: Date.now() };
+        folder.notes.unshift(copy);
+        dirty.add(copy.id);
+      }
+      for (const c of p.cards || []) {
+        if (!cards().some(x => x.term.toLowerCase() === String(c.term).toLowerCase()))
+          cards().push({ id: uid(), term: c.term, def: c.def, folder: folder.id, box: 0, due: Date.now(), ts: Date.now() });
+      }
+      if (p.tickets?.length) examOf(folder.id).tickets = p.tickets;
+
+      await save();
+      render(); refreshBadge();
+      location.hash = '';
+      box.classList.add('hidden');
+      openFolder(folder);
+      toast('Добавлено к тебе');
+    };
+  } catch (e) {
+    box.innerHTML = `<div class="gv-wrap"><div class="st-empty"><div class="big">🔗</div>
+      <p>${esc(e.message)}</p>
+      <button onclick="location.hash='';location.reload()">На главную</button></div></div>`;
+  }
+}
+
+addEventListener('hashchange', checkHash);
+function checkHash() {
+  const m = location.hash.match(/^#s=([a-z0-9]+)/i);
+  if (m) openShared(m[1]);
+}
+
+/* --- группы в личном кабинете --- */
+async function drawGroups() {
+  const box = $('#me-groups');
+  if (!box) return;
+  if (!cloud()) { box.innerHTML = '<p class="hint">Группы доступны с аккаунтом.</p>'; return; }
+  box.innerHTML = '<span class="dots">Загружаю</span>';
+  try {
+    const { list } = await api('/groups');
+    box.innerHTML = `
+      ${list.map(g => `<div class="grp" data-id="${g.id}">
+        <div><b>${esc(g.name)}</b><span>${g.people} ${plural(g.people, 'участник', 'участника', 'участников')} · код ${g.code}</span></div>
+        <button class="grp-open" data-id="${g.id}" data-name="${esc(g.name)}">Лента</button>
+        <button class="icon grp-code" data-code="${g.code}" title="Скопировать код">⧉</button>
+      </div>`).join('')}
+      <div class="grp-acts">
+        <button id="grp-new">Создать группу</button>
+        <button id="grp-join" class="primary">Войти по коду</button>
+      </div>
+      <div id="grp-feed"></div>`;
+
+    $('#grp-new').onclick = async () => {
+      const name = await ask('Название группы', 'Моя группа');
+      if (!name) return;
+      const g = await api('/group', 'POST', { name });
+      toast('Код для друзей: ' + g.code);
+      drawGroups();
+    };
+    $('#grp-join').onclick = async () => {
+      const code = await ask('Код группы');
+      if (!code) return;
+      try { const g = await api('/group/join', 'POST', { code }); toast('Ты в группе «' + g.name + '»'); drawGroups(); }
+      catch (e) { toast(e.message); }
+    };
+    $$('.grp-code').forEach(b => b.onclick = () => {
+      navigator.clipboard?.writeText(b.dataset.code);
+      toast('Код скопирован');
+    });
+    $$('.grp-open').forEach(b => b.onclick = () => openFeed(b.dataset.id, b.dataset.name));
+  } catch (e) { box.innerHTML = `<p class="hint">${esc(e.message)}</p>`; }
+}
+
+async function openFeed(gid, name) {
+  const box = $('#grp-feed');
+  box.innerHTML = '<span class="dots">Загружаю ленту</span>';
+  try {
+    const { list } = await api(`/group/${gid}/feed`);
+    box.innerHTML = `<div class="me-t">Лента группы «${esc(name)}»</div>` + (list.length
+      ? list.map(p => `<div class="post">
+          <div><b>${esc(p.title || 'Без названия')}</b>
+            <span>${p.own ? 'ты' : esc(p.author)} · ${p.kind === 'folder' ? 'сборник' : 'конспект'}</span></div>
+          <button class="post-open" data-code="${p.code}">Открыть</button>
+        </div>`).join('')
+      : '<p class="hint">Пока пусто. Открой конспект, нажми 🔗 и выложи его в группу.</p>');
+    $$('.post-open').forEach(b => b.onclick = () => { location.hash = '#s=' + b.dataset.code; });
+  } catch (e) { box.innerHTML = `<p class="hint">${esc(e.message)}</p>`; }
+}
+
 /* ================= ПОДГОТОВКА К ЗАЧЁТУ ================= */
 /* Письменный ответ на билет: пишешь своими словами, ИИ сверяет с конспектом.
    Прогресс хранится по предмету, чтобы видеть, какие билеты уже отвечены. */
@@ -1527,6 +1728,7 @@ function drawFolder(f) {
       </div>
       ${f.notes.length ? `<div class="sub-btns">
         <button id="sub-deck">🎴 Собрать карточки</button>
+        <button id="sub-share">🔗 Сборник</button>
         <button id="sub-add" class="primary">+ Конспект</button></div>` : ''}
     </div>
 
@@ -1558,6 +1760,7 @@ function drawFolder(f) {
   const add = () => newNote(f);
   if ($('#sub-add')) $('#sub-add').onclick = add;
   if ($('#sub-deck')) $('#sub-deck').onclick = () => harvest(f.notes, 'предмет');
+  if ($('#sub-share')) $('#sub-share').onclick = () => shareFolder(f);
   if ($('#sub-first')) $('#sub-first').onclick = add;
   $$('.ncard').forEach(b => b.onclick = () => {
     const n = f.notes.find(x => x.id === b.dataset.id);
@@ -1673,6 +1876,9 @@ function drawProfile() {
         <b>${t.right}/${t.total}</b><i>${new Date(t.ts).toLocaleDateString('ru')}</i></div>`).join('')}</div>
     </div>` : ''}
 
+    <div class="me-t" style="margin-top:26px">Одногруппники</div>
+    <div id="me-groups"></div>
+
     <label class="me-sound"><input type="checkbox" id="snd" ${sound.on ? 'checked' : ''}>
       Звук нажатий</label>
 
@@ -1683,6 +1889,7 @@ function drawProfile() {
       <button id="me-out" class="danger">Выйти</button>
     </div>`;
 
+  drawGroups();
   $('#snd').onchange = e => {
     sound.on = e.target.checked;
     localStorage.setItem('mute', sound.on ? '0' : '1');
