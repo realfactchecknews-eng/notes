@@ -17,7 +17,7 @@
 <meta property="og:url" content="https://clarityapp.ru/">
 <meta property="og:image" content="https://clarityapp.ru/logo.svg">
 <meta property="og:locale" content="ru_RU">
-<link rel="stylesheet" href="style.css?v=34">
+<link rel="stylesheet" href="style.css?v=35">
 </head>
 <body>
 
@@ -330,11 +330,19 @@
   <div class="modal-box">
     <h3>Модель ИИ</h3>
     <select id="api-model">
-      <option value="openai/gpt-oss-120b">gpt-oss-120b (умная)</option>
-      <option value="qwen/qwen3.8-27b">qwen3.8-27b</option>
-      <option value="openai/gpt-oss-20b">gpt-oss-20b (быстрая)</option>
-      <option value="groq/compound">compound (с поиском)</option>
+      <optgroup label="Бесплатно">
+        <option value="openai/gpt-oss-120b">gpt-oss-120b — по умолчанию</option>
+        <option value="qwen/qwen3.8-27b">qwen3.8-27b</option>
+        <option value="openai/gpt-oss-20b">gpt-oss-20b — быстрая</option>
+      </optgroup>
+      <optgroup label="Платные, умнее">
+        <option value="or:google/gemini-2.5-flash">Gemini 2.5 Flash — дёшево</option>
+        <option value="or:anthropic/claude-haiku-4.5">Claude Haiku 4.5</option>
+        <option value="or:openai/gpt-5-mini">GPT-5 mini</option>
+        <option value="or:anthropic/claude-sonnet-4.5">Claude Sonnet 4.5 — лучшее качество</option>
+      </optgroup>
     </select>
+    <p id="ai-spend" class="hint"></p>
     <div class="row">
       <button id="set-cancel">Отмена</button>
       <button id="set-save" class="primary">Сохранить</button>
@@ -432,6 +440,6 @@
 <input type="file" id="file-input" multiple hidden>
 <div id="toast" class="toast"></div>
 
-<script src="app.js?v=34"></script>
+<script src="app.js?v=35"></script>
 </body>
 </html>

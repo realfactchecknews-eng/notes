@@ -945,6 +945,11 @@ const cfg = () => ({
 $('#btn-settings').onclick = () => {
   const c = cfg();
   $('#api-model').value = c.model;
+  $('#ai-spend').textContent = '';
+  if (cloud()) api('/ai/usage').then(u => {
+    if (u.calls) $('#ai-spend').textContent =
+      `Сегодня платных запросов: ${u.calls} · ${num(u.tin + u.tout)} токенов`;
+  }).catch(() => {});
   show($('#set-modal'));
 };
 $('#set-cancel').onclick = () => hide($('#set-modal'));
@@ -995,7 +1000,7 @@ async function askAI(task) {
         max_completion_tokens: 4000,
         reasoning_effort: 'low',
         messages: [
-          { role: 'system', content: 'Ты помощник для учебных конспектов. Отвечай на русском чистым HTML (h2, p, ul, ol, table, b, i) без markdown и без ```.' },
+          { role: 'system', content: 'Ты помощник для учебных конспектов. Отвечай на русском фрагментом HTML (h2, p, ul, ol, table, b, i). Никаких <!DOCTYPE>, <html>, <head>, <style> и markdown.' },
           { role: 'user', content: `${task}\n\nЗаголовок: ${cur?.title || '—'}\n\nКонспект:\n${$('#body').innerText || '(пусто)'}` },
         ],
       }),
@@ -1609,7 +1614,7 @@ $('#imp-go').onclick = async () => {
 
   try {
     const html = await groq([
-      { role: 'system', content: 'Ты оформляешь учебные конспекты. Отвечай ТОЛЬКО чистым HTML без markdown, без <html> и <body>.' },
+      { role: 'system', content: 'Ты оформляешь учебные конспекты. Отвечай ТОЛЬКО фрагментом HTML: заголовки, абзацы, списки, таблицы. Никаких <!DOCTYPE>, <html>, <head>, <body>, <style> и markdown.' },
       { role: 'user', content: `Оформи сырой конспект: разбей на разделы с заголовками h2 и h3, выдели термины через <b>, списки через ul/ol, сравнения и классификации — таблицей, важные мысли — blockquote. Сохрани ВСЕ факты исходника, ничего не выбрасывай и не сокращай.
 ${more
   ? 'Дополни: раскрой сокращения, добавь короткие пояснения и примеры к сложным местам. Каждое своё дополнение оберни в <span class="ai-add">…</span>, чтобы его было видно.'
@@ -1623,7 +1628,7 @@ ${raw.slice(0, 14000)}` },
       || (html.match(/<h2[^>]*>(.*?)<\/h2>/i)?.[1] || '').replace(/<[^>]+>/g, '').trim()
       || 'Импортированный конспект';
 
-    let body = html.replace(/```html|```/g, '').trim();
+    let body = cleanHtml(html);
 
     if (withMap) {
       toast('Рисую схему…');
@@ -2278,6 +2283,12 @@ function drawResult() {
 /* общий вызов модели */
 async function groq(messages, effort = 'low') {
   const c = cfg();
+  /* Платные модели идут через наш Worker: ключ лежит там, а не в коде страницы. */
+  if (c.model.startsWith('or:')) {
+    if (!cloud()) throw new Error('платные модели работают только с аккаунтом');
+    const r = await api('/ai', 'POST', { model: c.model.slice(3), messages });
+    return (r.text || '').replace(/```json|```html|```/g, '');
+  }
   const r = await fetch('https://api.groq.com/openai/v1/chat/completions', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + c.key },
@@ -2290,6 +2301,20 @@ async function groq(messages, effort = 'low') {
   if (!r.ok) throw new Error(j.error?.message || r.status);
   const m = j.choices[0].message;
   return (m.content || m.reasoning || '').replace(/```json|```html|```/g, '');
+}
+
+/* Одни модели отдают фрагмент, другие — целую страницу со стилями.
+   Оставляем только содержимое, иначе чужой <style> поедет в конспект. */
+function cleanHtml(s) {
+  let h = String(s).replace(/```html|```/g, '').trim();
+  const body = h.match(/<body[^>]*>([\s\S]*?)<\/body>/i);
+  if (body) h = body[1];
+  return h
+    .replace(/<!DOCTYPE[^>]*>/gi, '')
+    .replace(/<\/?(html|head|body|meta|title|link)[^>]*>/gi, '')
+    .replace(/<style[\s\S]*?<\/style>/gi, '')
+    .replace(/<script[\s\S]*?<\/script>/gi, '')
+    .trim();
 }
 
 function htmlToText(html) {

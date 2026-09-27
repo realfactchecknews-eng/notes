@@ -60,3 +60,13 @@ CREATE TABLE IF NOT EXISTS posts (
   ts   INTEGER NOT NULL,
   PRIMARY KEY (gid, code)
 );
+
+-- Расход ИИ по пользователям и дням, чтобы держать бюджет
+CREATE TABLE IF NOT EXISTS ai_use (
+  uid    TEXT NOT NULL,
+  day    TEXT NOT NULL,
+  calls  INTEGER DEFAULT 0,
+  tin    INTEGER DEFAULT 0,
+  tout   INTEGER DEFAULT 0,
+  PRIMARY KEY (uid, day)
+);

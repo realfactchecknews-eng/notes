@@ -314,6 +314,68 @@ export default {
         return json({ ok: true });
       }
 
+      /* ---- прокси к платным моделям ---- */
+      /* Ключ живёт только здесь: в открытом коде сайта его нет.
+         Лимиты свои, чтобы чужой человек не выжег баланс за вечер. */
+      if (path === '/ai' && req.method === 'POST') {
+        if (!env.OPENROUTER_KEY) return bad('Платные модели не подключены', 503);
+
+        const DAY_CALLS = 80;              // на пользователя в сутки
+        const DAY_CALLS_ALL = 600;         // на всех, страховка бюджета
+        const day = new Date().toISOString().slice(0, 10);
+
+        const [mine, all] = await Promise.all([
+          env.DB.prepare('SELECT calls FROM ai_use WHERE uid = ? AND day = ?').bind(me.id, day).first(),
+          env.DB.prepare('SELECT SUM(calls) AS c FROM ai_use WHERE day = ?').bind(day).first(),
+        ]);
+        if ((mine?.calls || 0) >= DAY_CALLS) return bad('Дневной лимит запросов исчерпан, попробуй завтра', 429);
+        if ((all?.c || 0) >= DAY_CALLS_ALL) return bad('Общий дневной лимит исчерпан', 429);
+
+        const { messages, model } = await req.json();
+        if (!Array.isArray(messages)) return bad('Нет сообщений');
+        const size = JSON.stringify(messages).length;
+        if (size > 60000) return bad('Слишком длинный запрос');
+
+        const r = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+          method: 'POST',
+          headers: {
+            authorization: 'Bearer ' + env.OPENROUTER_KEY,
+            'content-type': 'application/json',
+            'HTTP-Referer': 'https://clarityapp.ru',
+            'X-Title': 'Clarity',
+          },
+          body: JSON.stringify({
+            model: model || 'anthropic/claude-haiku-4.5',
+            temperature: 0.3,
+            max_tokens: 6000,
+            messages,
+          }),
+        });
+        const j = await r.json();
+        if (!r.ok) return bad(j.error?.message || 'Модель не ответила', r.status);
+
+        const u = j.usage || {};
+        await env.DB.prepare(`
+          INSERT INTO ai_use (uid, day, calls, tin, tout) VALUES (?, ?, 1, ?, ?)
+          ON CONFLICT(uid, day) DO UPDATE SET
+            calls = calls + 1, tin = tin + ?, tout = tout + ?`)
+          .bind(me.id, day, u.prompt_tokens || 0, u.completion_tokens || 0,
+                u.prompt_tokens || 0, u.completion_tokens || 0).run();
+
+        return json({
+          text: j.choices?.[0]?.message?.content || '',
+          left: DAY_CALLS - (mine?.calls || 0) - 1,
+        });
+      }
+
+      /* сколько ИИ израсходован за сегодня */
+      if (path === '/ai/usage' && req.method === 'GET') {
+        const day = new Date().toISOString().slice(0, 10);
+        const u = await env.DB.prepare('SELECT calls, tin, tout FROM ai_use WHERE uid = ? AND day = ?')
+          .bind(me.id, day).first();
+        return json(u || { calls: 0, tin: 0, tout: 0 });
+      }
+
       return bad('Нет такого адреса', 404);
     } catch (e) {
       return bad('Сервер не справился: ' + e.message, 500);
